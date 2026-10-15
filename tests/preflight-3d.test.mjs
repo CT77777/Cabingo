@@ -124,7 +124,7 @@ function completeRoute({seed=7,errors=0,hesitation=0,handoff=false,strategy='saf
     for(let n=0;index===0&&n<errors;n++) {pick(s,c=>!c.good);finishAction(s);assert.equal(interact(s),true);}
     pick(s,goodSelf);finishAction(s);
   }
-  for(const id of ['water','blanket','question']) {
+  for(const id of ['water','blanket']) {
     if(s.status!=='playing') break;
     serve(s,id,handoff&&id==='water'?'handoff':'self',hesitation);
   }
@@ -145,7 +145,7 @@ test('world contract has six rows, 100-second clock and isolated state',()=>{
   assert.deepEqual(WORLD.rows,[3,5,7,9,11,13]);approx(WORLD.radius,.23);approx(WORLD.speed,2.35);
   approx(WORLD.interactionRadius,1.1);approx(WORLD.minZ,.45);approx(WORLD.maxZ,15.5);
   const a=createState({seed:7}),b=createState({seed:7});assert.notEqual(a.runId,b.runId);assert.deepEqual({...a,runId:null},{...b,runId:null});
-  assert.equal(a.duration,100);assert.equal(a.status,'briefing');assert.equal(a.tasks.length,6);
+  assert.equal(a.duration,100);assert.equal(a.status,'briefing');assert.equal(a.tasks.length,5);
   assert.equal(a.safety,100);assert.equal(a.comfort,80);assert.equal(a.completed,0);
   assert.equal(a.handoffTokens,1);assert.equal(a.handoffJob,null);assert.equal(a.lesson,null);
   assert.equal(a.dialog,null);assert.equal(a.action,null);assert.equal(chapterReady(a),false);
@@ -157,7 +157,7 @@ test('seeded rows, side and variants exactly match the original 2D scenario gene
   for(const seed of [1,7,37,101,1001,9999,135791,246810,9876543]) {
     let n=seed>>>0;const rand=()=>((n=(Math.imul(n,1664525)+1013904223)>>>0)/4294967296);
     const rows=[0,1,2,3,4,5];for(let i=5;i>0;i--){const j=Math.floor(rand()*(i+1));[rows[i],rows[j]]=[rows[j],rows[i]];}
-    const s=createState({seed});assert.equal(new Set(s.tasks.map(t=>t.row)).size,6);
+    const s=createState({seed});assert.equal(new Set(s.tasks.map(t=>t.row)).size,5);
     for(const [i,t] of s.tasks.entries()) {
       const side=rand()>.5?'left':'right',variant=Math.floor(rand()*3);
       assert.equal(t.row,rows[i]);assert.equal(t.side,side);assert.equal(t.variant,variant);
@@ -223,7 +223,7 @@ test('invalid dt and choice indices leave state unchanged',()=>{
 test('createState sanitizes invalid seed values and non-object options',()=>{
   for(const options of [null,undefined,{},[],0,'bad',{seed:NaN},{seed:Infinity},{seed:'7'},{seed:null}]){
     let s;assert.doesNotThrow(()=>s=createState(options));numericPlayer(s);
-    assert.equal(s.tasks.length,6);assert(Number.isFinite(s.seed));
+    assert.equal(s.tasks.length,5);assert(Number.isFinite(s.seed));
     assert(s.tasks.every(t=>Number.isInteger(t.variant)&&t.variant>=0&&t.variant<=2));
   }
 });
@@ -250,14 +250,7 @@ test('every safety variant states its observable clue and has one appropriate ac
   }
   for(const [id,values]of Object.entries(seen))assert.equal(values.size,3,id);
 });
-test('question answers follow the visible estimate and retain a slower verification option',()=>{
-  const seen=new Set();for(const seed of [1,7,37,101,7919,15838,23757]){
-    const s=fresh(seed);openTask(s,'question');const known=task(s,'question').variant!==0;
-    assert.equal(choices(s).find(c=>c.id==='estimate').good,known);
-    assert.equal(choices(s).find(c=>c.id==='unknown').good,!known);
-    const ask=choices(s).find(c=>c.id==='ask');assert.equal(ask.good,true);assert.equal(ask.duration,9);seen.add(known);
-  }assert.equal(seen.size,2);
-});
+test('Departure-time question is removed from the chapter',()=>{assert(!fresh().tasks.some(t=>t.id==='question'));});
 test('reading freezes elapsed, movement, demand timers and all progress',()=>{
   const s=fresh();openTask(s,'bag');const before=clone(s);
   advance(s,60,{input:{x:1,z:1},autoLessons:false});assert.deepEqual(s,before);
@@ -319,7 +312,7 @@ test('handoff takes 3 seconds then 12 background seconds and provides reduced cr
 test('dialog reading freezes a pending handoff and used token remains visibly unavailable',()=>{
   const s=fresh(7);serve(s,'water','handoff');openTask(s,'blanket');const before=clone(s);
   advance(s,50,{autoLessons:false});assert.deepEqual(s,before);const c=choices(s).find(c=>c.handoff);
-  assert.equal(c.good,false);assert(c.tags.includes('交接剩0次'));pick(s,c=>c.handoff);finishAction(s);
+  assert.equal(c.good,false);assert(c.tags.includes('本輪還可交接 0 次'));pick(s,c=>c.handoff);finishAction(s);
   assert.equal(s.handoffTokens,0);assert.equal(task(s,'blanket').done,false);
   assert.equal(s.safetyErrors,0);assert.equal(s.mistakes,1);assert.equal(s.servicePenalty,9);
 });
@@ -328,7 +321,7 @@ test('one wait takes 3 seconds, extends patience by 12, and does not complete se
   advance(s,3-DT);assert.equal(task(s,'water').acknowledged,false);frame(s);
   assert.equal(task(s,'water').acknowledged,true);assert.equal(task(s,'water').patience,patience+12);
   assert.equal(task(s,'water').done,false);assert.equal(interact(s),true);
-  const wait=choices(s).find(c=>c.ack);assert.equal(wait.good,false);assert(wait.tags.includes('等候+0秒'));
+  const wait=choices(s).find(c=>c.ack);assert.equal(wait.good,false);assert(wait.tags.includes('已延長過等候'));
   pick(s,c=>c.ack);finishAction(s);assert.equal(task(s,'water').patience,patience+12);
   assert.equal(s.safetyErrors,0);assert.equal(s.mistakes,1);assert.equal(s.servicePenalty,9);
 });
@@ -340,11 +333,10 @@ test('personal service with unresolved visible baggage is a retained safety erro
   pick(s,c=>c.id==='serve');finishAction(s);assert.equal(s.safetyErrors,1);assert.equal(s.safety,80);
   assert.equal(task(s,'water').done,false);assert.equal(task(s,'bag').done,false);
 });
-test('service spawns at 0, 5, 10 seconds and warns exactly 10 seconds before each hazard',()=>{
-  const s=fresh(7);assert.deepEqual(['water','blanket','question'].map(id=>task(s,id).active),[true,false,false]);
+test('service spawns at 0 and 5 seconds and warns exactly 10 seconds before each hazard',()=>{
+  const s=fresh(7);assert.deepEqual(['water','blanket'].map(id=>task(s,id).active),[true,false]);
   untilElapsed(s,5-DT);assert.equal(task(s,'blanket').active,false);frame(s);assert.equal(task(s,'blanket').active,true);
-  untilElapsed(s,10-DT);assert.equal(task(s,'question').active,false);frame(s);assert.equal(task(s,'question').active,true);
-  for(const [id,spawn,patience]of [['water',0,32],['blanket',5,39],['question',10,46]]){
+  for(const [id,spawn,patience]of [['water',0,32],['blanket',5,39]]){
     const q=fresh(7);assert.equal(task(q,id).spawn,spawn);assert.equal(task(q,id).patience,patience);
     untilElapsed(q,spawn+patience-10-DT);assert.equal(task(q,id).warned,false);frame(q);assert.equal(task(q,id).warned,true);
     assert.equal(task(q,id).late,false);untilElapsed(q,spawn+patience-DT);assert.equal(task(q,id).late,false);frame(q);
@@ -366,9 +358,9 @@ test('first aisle lesson is remembered and further hazards still accrue conseque
   untilElapsed(s,44-DT);frame(s);assert.equal(s.lesson,null);assert.equal(s.hazards.length,2);
   assert.equal(s.servicePenalty,16);assert.equal(s.lessonSeen.filter(id=>id==='aisle').length,1);
 });
-test('report requires all three safety checks, all three services and no open hazards',()=>{
+test('report requires all three safety checks, both services and no open hazards',()=>{
   // Isolated prerequisite fixtures validate every finish-gate combination.
-  for(const missing of ['bag','belt','tray','water','blanket','question','hazard']){
+  for(const missing of ['bag','belt','tray','water','blanket','hazard']){
     const s=fresh();for(const t of s.tasks)t.done=t.id!==missing;
     s.completed=s.tasks.filter(t=>t.done).length;
     if(missing==='hazard')s.hazards.push({id:'hazard-water',taskId:'water',x:0,z:13,done:false});
@@ -378,7 +370,7 @@ test('report requires all three safety checks, all three services and no open ha
 test('a pending handoff cannot satisfy the finish gate before actual colleague delivery',()=>{
   const s=fresh(6);
   for(const t of s.tasks.filter(t=>t.kind==='safety').sort((a,b)=>a.z-b.z)){if(!t.done)serve(s,t.id);}
-  for(const id of ['blanket','question'])serve(s,id);
+  for(const id of ['blanket'])serve(s,id);
   serve(s,'water','handoff');assert(s.handoffJob);assert.equal(chapterReady(s),false);
   walkZ(s,WORLD.reportPoint.z);assert(s.handoffJob,'returning must leave colleague work pending in this fixture');
   assert.equal(interact(s),false);assert.equal(s.status,'playing');
@@ -392,14 +384,14 @@ test('hard cutoff cancels a nearly complete task and pending handoff before same
   const h=fresh(7);serve(h,'water','handoff');h.elapsed=100-DT;h.handoffJob.remaining=DT;
   frame(h);assert.equal(task(h,'water').done,false);assert.equal(h.status,'finished');assert.equal(h.grade,'incomplete');
 });
-test('ignoring all requests times out incomplete with all three hazards retained',()=>{
+test('ignoring all requests times out incomplete with both hazards retained',()=>{
   const s=fresh();untilElapsed(s,100);assert.equal(s.status,'finished');assert.equal(s.grade,'incomplete');
-  assert.equal(s.elapsed,100);assert.equal(s.hazards.length,3);assert.equal(s.completed,0);
+  assert.equal(s.elapsed,100);assert.equal(s.hazards.length,2);assert.equal(s.completed,0);
   const before=clone(s);advance(s,5);assert.deepEqual(s,before);assert.equal(interact(s),false);assert.equal(choose(s,0),false);
   assert.equal(pause(s),false);assert.equal(resume(s),false);assert.equal(start(s),false);move(s,1,1,.1);assert.deepEqual(s,before);
 });
 test('practice wrong choices reopen the same ordered dialog immediately with specific feedback',()=>{
-  for(const seed of [1,7,37,101])for(const id of ['bag','belt','tray','water','blanket','question']){
+  for(const seed of [1,7,37,101])for(const id of ['bag','belt','tray','water','blanket']){
     const s=fresh(seed,true);
     if(['water','blanket'].includes(id))serve(s,'bag');
     openTask(s,id);
@@ -430,7 +422,7 @@ test('practice retry survives pause, remains untimed and does not contaminate fo
   assert.equal(choose(s,0),false);assert.equal(resume(s),true);assert.deepEqual(s.dialog,dialog);
   assert.equal(closeDialog(s),true);advance(s,110);assert.equal(s.status,'playing');assert(s.elapsed>100);
   assert.equal(s.safetyErrors,0);assert.equal(s.mistakes,0);assert.equal(s.safety,100);assert.equal(s.servicePenalty,0);
-  assert.equal(task(s,'bag').done,false);assert.equal(s.tasks.length,6);assert(!s.lessonSeen.includes('correction'));
+  assert.equal(task(s,'bag').done,false);assert.equal(s.tasks.length,5);assert(!s.lessonSeen.includes('correction'));
   const formal=fresh(7);assert.equal(formal.dialog,null);assert.equal(formal.action,null);assert.equal(formal.elapsed,0);
   openTask(formal,'bag');pick(formal,c=>!c.good);assert.equal(formal.action.duration,2);
   assert.equal(formal.lesson.id,'correction');assert.equal(formal.safetyErrors,1);assert.equal(formal.safety,80);
@@ -444,14 +436,14 @@ test('fresh replay clears task completion, penalties, jobs, lessons, dialogs, cl
 });
 test('normal, one-error and two-error physical routes retain independent safety grading',()=>{
   for(const errors of [0,1,2]){
-    const s=completeRoute({seed:7,errors});assert.equal(s.status,'finished');assert.equal(s.completed,6);
+    const s=completeRoute({seed:7,errors});assert.equal(s.status,'finished');assert.equal(s.completed,5);
     assert.equal(s.grade,['clean','recovered','retry'][errors]);assert.equal(s.safetyErrors,errors);
     assert.equal(s.safety,100-errors*20);assert.equal(openHazards(s).length,0);assert(s.elapsed<100);
   }
 });
 for(const seed of [1,2,3,4,5,6,7,8])for(const errors of [0,1,2])test(`seed ${seed}: ${errors} safety errors, two-second hesitation, one handoff`,()=>{
   const s=completeRoute({seed,errors,hesitation:2,handoff:true,strategy:'safety-first-one-handoff-human-paced'});
-  assert.equal(s.completed,6,`seed ${seed}, ${errors} errors at ${s.elapsed}s`);
+  assert.equal(s.completed,5,`seed ${seed}, ${errors} errors at ${s.elapsed}s`);
   assert.equal(s.grade,['clean','recovered','retry'][errors]);assert.equal(openHazards(s).length,0);assert(s.elapsed<100);
 });
 
@@ -483,13 +475,13 @@ test('service correction and late penalties cap every subsequent comfort credit'
   const s=fresh(7);serve(s,'water','ack');openTask(s,'water');pick(s,c=>c.ack);assert.equal(s.action.duration,2);finishAction(s);
   assert.equal(s.servicePenalty,9);assert.equal(s.safetyErrors,0);
   for(const t of s.tasks.filter(t=>t.kind==='safety').sort((a,b)=>a.z-b.z))if(!t.done)serve(s,t.id);
-  for(const id of ['water','blanket','question'])serve(s,id);
+  for(const id of ['water','blanket'])serve(s,id);
   finishChapter(s);assert.equal(s.grade,'clean');assert.equal(s.safety,100);
   assert(s.servicePenalty>=9);assert(s.comfort<=100-s.servicePenalty);assert(s.comfort<100);
 });
 test('all row targets are physically reachable from either side of the center aisle',()=>{
   const encountered=new Set();
-  for(const seed of [1,7,37,101,7919,9999])for(const side of [-1,1])for(const id of ['bag','belt','tray','water','blanket','question']){
+  for(const seed of [1,7,37,101,1001,135791,246810,7919,9999])for(const side of [-1,1])for(const id of ['bag','belt','tray','water','blanket']){
     const s=fresh(seed);const goal=side*.4;
     while(Math.abs(s.player.x-goal)>EPS)frame(s,Math.min(DT,Math.abs(goal-s.player.x)/WORLD.speed),{x:side,z:0});
     assert(openTask(s,id));assert.equal(dialogId(s),id);assert(Math.abs(s.player.x-goal)<EPS);
@@ -557,7 +549,7 @@ test('wrong-service correction cannot freeze the original passenger patience dea
 });
 for(const seed of [37,101,1001,7919,9876543])for(const errors of [0,1,2])test(`varied seed ${seed}: human-paced all-self route with ${errors} safety errors`,()=>{
   const s=completeRoute({seed,errors,hesitation:2,handoff:false,strategy:'safety-first-all-self-human-paced'});
-  assert.equal(s.completed,6,`seed ${seed}, ${errors} errors at ${s.elapsed}s`);
+  assert.equal(s.completed,5,`seed ${seed}, ${errors} errors at ${s.elapsed}s`);
   assert.equal(s.grade,['clean','recovered','retry'][errors]);assert.equal(openHazards(s).length,0);assert(s.elapsed<100);
 });
 

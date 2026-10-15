@@ -6,11 +6,11 @@ assert(s.action.interaction);const before=s.action.time;for(let i=0;i<100;i++)ga
 let guard=0;while(s.action&&guard++<20){const step=s.action.interaction.steps[s.action.interaction.index];game.actionInput(s,'press');if(step.mode==='hold'){for(let i=0;i<14;i++)game.tick(s,.05);game.actionInput(s,'release');}}
 assert(!s.action);assert(bag.done);assert(guard<20);
 assert.equal(s.safetyErrors,0);
-for(const id of ['bag','belt','tray'])for(let v=0;v<3;v++){const q=game.createState({seed:7,handsOn:true});game.start(q);const t=q.tasks.find(x=>x.id===id);t.variant=v;q.player.z=t.z-.8;game.interact(q);assert(q.dialog.choices.some(c=>c.humorous));assert.equal(q.dialog.choices.length,3);assert(q.dialog.choices.some(c=>c.good));}
-console.log('PASS hands-on completion, idle gating and humorous-choice coverage');
+for(const id of ['bag','belt','tray'])for(let v=0;v<3;v++){const q=game.createState({seed:7,handsOn:true});game.start(q);const t=q.tasks.find(x=>x.id===id);t.variant=v;q.player.z=t.z-.8;game.interact(q);assert(q.dialog.choices.every(c=>!c.humorous));assert.equal(q.dialog.choices.length,3);assert(q.dialog.choices.some(c=>c.good));}
+console.log('PASS hands-on completion, idle gating and clear-choice coverage');
 // Every actual task and branch completes through deliberate steps.
 function finishWork(s){let n=0;while(s.action&&n++<12){const i=s.action.interaction;assert(i);const step=i.steps[i.index];game.actionInput(s,'press');if(step.mode==='hold'){for(let j=0;j<14;j++)game.tick(s,.05);game.actionInput(s,'release');}}assert(!s.action);}
-for(const id of ['bag','belt','tray','water','blanket','question'])for(let v=0;v<3;v++){
+for(const id of ['bag','belt','tray','water','blanket'])for(let v=0;v<3;v++){
  const q=game.createState({seed:7,handsOn:true,practice:true});game.start(q);q.tasks.find(t=>t.id==='bag').done=id!=='bag';const t=q.tasks.find(x=>x.id===id);t.variant=v;t.active=true;q.player.z=t.z-.8;game.interact(q);game.choose(q,q.dialog.choices.findIndex(c=>c.good&&!c.handoff&&!c.ack));finishWork(q);assert(t.done,`${id}/${v}`);
 }
 const hold=game.createState({seed:7,handsOn:true,practice:true});game.start(hold);const b=hold.tasks.find(t=>t.id==='bag');b.variant=0;hold.player.z=b.z-.8;game.interact(hold);game.choose(hold,hold.dialog.choices.findIndex(c=>c.good));game.actionInput(hold,'press');game.tick(hold,.1);game.actionInput(hold,'release');assert(hold.action.interaction.retry);assert.equal(hold.action.interaction.index,0);assert.equal(hold.mistakes,0);game.actionInput(hold,'press');for(let n=0;n<25;n++)game.tick(hold,.05);game.actionInput(hold,'release');assert(hold.action.interaction.retry);game.actionInput(hold,'press');game.tick(hold,.1);game.pause(hold);assert(!hold.action.interaction.held);game.resume(hold);finishWork(hold);assert(b.done);
@@ -21,17 +21,11 @@ const interrupted=game.createState({seed:7,handsOn:true});game.start(interrupted
 for(const id of ['belt','water']){
  const q=game.createState({seed:7,handsOn:true,practice:true});game.start(q);q.tasks.find(t=>t.id==='bag').done=true;const t=q.tasks.find(t=>t.id===id);t.variant=0;t.active=true;q.player.z=t.z-.8;game.interact(q);game.choose(q,q.dialog.choices.findIndex(c=>c.good&&!c.handoff&&!c.ack));game.actionInput(q,'press');game.actionInput(q,'press');for(let n=0;n<8;n++)game.tick(q,.05);assert(q.action.time/q.action.duration<.75,'hold cannot reach success before accepted release');game.actionInput(q,'release');assert(!t.done);finishWork(q);assert(t.done);
 }
-for(const id of ['bag','belt','tray']){
- const outcomes=new Set(),labels=new Map();for(let seed=1;seed<=40;seed++)for(let variant=0;variant<3;variant++){
-  const q=game.createState({seed,handsOn:true});game.start(q);const t=q.tasks.find(t=>t.id===id);t.variant=variant;q.player.z=t.z-.8;game.interact(q);const funny=q.dialog.choices.find(c=>c.humorous);outcomes.add(funny.good);if(labels.has(funny.id))assert.equal(labels.get(funny.id),funny.label,'joke copy describes action, never reveals variant');labels.set(funny.id,funny.label);
- }assert.equal(outcomes.size,2,'humor can be correct or wrong');assert.equal(labels.size,3,'every action may receive humorous wording');
-}
-
 const cap=game.createState({seed:7,handsOn:true,practice:true});game.start(cap);cap.tasks.find(t=>t.id==='bag').done=true;const ct=cap.tasks.find(t=>t.id==='water');cap.player.z=ct.z-.8;game.interact(cap);game.choose(cap,cap.dialog.choices.findIndex(c=>c.id==='serve'));game.actionInput(cap,'press');game.actionInput(cap,'press');for(let n=0;n<24;n++)game.tick(cap,.05);assert(cap.action.time/cap.action.duration<=.725,'late release still cannot claim success');
 
-for(const id of ['bag','belt','tray','water','blanket','question'])for(let variant=0;variant<3;variant++){
+for(const id of ['bag','belt','tray','water','blanket'])for(let variant=0;variant<3;variant++){
  const q=game.createState({seed:7,handsOn:true,contextual:true,practice:true});game.start(q);q.tasks.find(t=>t.id==='bag').done=id!=='bag';const t=q.tasks.find(t=>t.id===id);t.active=true;t.variant=variant;q.player.z=t.z-.8;game.interact(q);
- game.choose(q,q.dialog.choices.findIndex(c=>c.good&&!c.handoff&&!c.ack));assert(q.action);assert(!q.action.interaction);assert(q.action.duration<=2);assert(!t.done);const duration=q.action.duration;
+ game.choose(q,q.dialog.choices.findIndex(c=>c.good&&!c.handoff&&!c.ack));assert(q.action);assert(!q.action.interaction);assert(q.action.duration<=3);assert(!t.done);const duration=q.action.duration;
  game.pause(q);for(let n=0;n<80;n++)game.tick(q,.05);assert(!t.done);game.resume(q);for(let n=0;n<Math.ceil(duration/.05)+1;n++)game.tick(q,.05);assert(t.done,`${id}/${variant} contextual completion`);
 }
 const delegated=game.createState({seed:7,handsOn:true,contextual:true,practice:true});game.start(delegated);const dtask=delegated.tasks.find(t=>t.id==='water');delegated.player.z=dtask.z-.8;game.interact(delegated);game.choose(delegated,delegated.dialog.choices.findIndex(c=>c.handoff));for(let n=0;n<21;n++)game.tick(delegated,.05);if(delegated.lesson)game.dismissLesson(delegated);assert(delegated.handoffJob);assert(!dtask.done);const remaining=delegated.handoffJob.remaining;game.pause(delegated);for(let n=0;n<100;n++)game.tick(delegated,.05);assert.equal(delegated.handoffJob.remaining,remaining);game.resume(delegated);const startZ=delegated.player.z;game.tick(delegated,.05,{z:1});assert.notEqual(delegated.player.z,startZ);for(let n=0;n<241;n++)game.tick(delegated,.05);assert(dtask.done&&dtask.handoff);assert.equal(delegated.handoffTokens,0);

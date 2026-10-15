@@ -62,7 +62,7 @@ export function createCabinAudio({contextFactory=()=>new (globalThis.AudioContex
   }
   function tone(type){
     const patterns={choice:[[660,0,.08]],mistake:[[210,0,.16],[175,.12,.18]],demand:[[660,0,.18],[880,.18,.3]],complete:[[523,0,.12],[659,.1,.12],[784,.2,.22]],finish:[[523,0,.2],[659,.15,.2],[784,.3,.4]],retry:[[330,0,.25],[262,.18,.4]],buckle:[[1500,0,.035],[800,.03,.04]],close:[[110,0,.13],[75,.08,.18]],cup:[[1200,0,.04],[1600,.04,.09]]};
-    const pattern=patterns[type]||patterns.choice;
+    const pattern=type==='time-warning'?[[440,0,.22],[660,.25,.32]]:patterns[type]||patterns.choice;
     while(voices.size>=8)stop(voices.values().next().value);
     const record={sources:[],nodes:[]};voices.add(record);let remaining=pattern.length;
     for(const [frequency,delay,duration] of pattern){
