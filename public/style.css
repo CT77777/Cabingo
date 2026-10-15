@@ -501,3 +501,53 @@ body[data-panel=recovery] aside, body[data-panel=recovery] .control-dock, body[d
 .evidence-cards dd { font-size:14px; font-weight:700; margin:4px 0 0; }
 .boarding-traffic { color:var(--mint); font-size:12px; border-top:1px solid #a8dfcb44; padding-top:10px; }
 #nextChapterButton { width:100%; margin:10px 0; }
+
+/* Optional learning layer: a cabin field notebook, separate from the live HUD. */
+.codex-launch { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.codex-launch span { color:var(--mint); font-variant-numeric:tabular-nums; }
+.codex-overlay { position:fixed; inset:0; z-index:180; display:grid; place-items:center; padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); background:#0b202bc9; backdrop-filter:blur(8px); }
+.codex-book { display:flex; flex-direction:column; width:min(780px,100%); max-height:100%; overflow:hidden; padding:26px; border:1px solid #a8dfcb66; border-radius:16px; background:#17353f; box-shadow:0 24px 70px #07151f77; color:#eaf1e8; }
+.codex-header { display:flex; align-items:center; justify-content:space-between; gap:16px; flex:none; }
+.codex-header h2 { margin:6px 0; font-size:28px; }
+.codex-header button { min-height:44px; flex:none; }
+.codex-book>p { font-size:13px; line-height:1.7; margin:10px 0; }
+.codex-meta { display:flex; flex-wrap:wrap; gap:8px 16px; padding:10px 0 16px; border-bottom:1px solid #a8dfcb44; }
+.codex-meta strong { color:var(--gold); font-size:14px; }
+.codex-meta small { color:#c1d8d0; font-size:12px; }
+.codex-content { overflow:auto; overscroll-behavior:contain; min-height:0; padding-right:8px; scrollbar-gutter:stable; }
+.codex-content section>h3 { font-size:13px; color:var(--mint); letter-spacing:.12em; margin:20px 0 10px; }
+.knowledge-card { border:1px solid #a8dfcb55; border-radius:8px; margin:8px 0; background:#213f48; overflow:hidden; }
+.knowledge-card>summary { padding:14px; cursor:pointer; min-height:44px; font-size:15px; font-weight:700; }
+.knowledge-card[open]>summary { color:var(--gold); border-bottom:1px solid #a8dfcb33; }
+.knowledge-card.locked { border-style:dashed; background:#163039; padding:14px; }
+.knowledge-card.locked p { margin:0 0 6px; color:#c2d3cc; font-size:14px; }
+.knowledge-card.locked small { display:block; color:#b8cbc4; font-size:12px; line-height:1.6; }
+.knowledge-copy { padding:4px 14px 14px; }
+.knowledge-copy p { font-size:14px; line-height:1.8; margin:12px 0; color:#e5eee5; }
+.knowledge-copy small { display:block; font-size:12px; line-height:1.7; color:#bdd5cc; }
+.knowledge-copy .knowledge-review { display:inline-block; color:var(--gold); border:1px solid #edcc9155; border-radius:4px; padding:2px 7px; margin-bottom:8px; }
+.knowledge-copy a { display:block; color:var(--mint); padding:8px 0; text-underline-offset:3px; overflow-wrap:anywhere; font-size:12px; line-height:1.7; }
+.knowledge-copy p.source-note { font-size:12px; color:#c3d5cc; }
+.codex-book>p.codex-disclaimer { flex:none; font-size:12px; color:#c3d5cc; border-top:1px solid #a8dfcb33; padding-top:12px; margin-bottom:0; }
+.review-details { border-top:1px solid #a8dfcb55; border-bottom:1px solid #a8dfcb55; margin:14px 0 8px; }
+.review-details>summary { cursor:pointer; color:var(--mint); padding:12px 0; font-size:13px; min-height:44px; }
+.judgment { padding:12px 0; border-top:1px solid #a8dfcb33; }
+.judgment>summary { cursor:pointer; color:var(--gold); font-size:13px; min-height:44px; padding:10px 0; }
+.judgment h3 { font-size:14px; }
+.judgment .knowledge-copy { padding:0; }
+#judgmentList p { font-size:13px; line-height:1.75; }
+@media(max-width:600px) {
+ .codex-overlay { padding:10px; }
+ .codex-book { padding:16px; border-radius:12px; }
+ .codex-header { gap:8px; }
+ .codex-header h2 { font-size:23px; }
+ .codex-header button { padding:8px 12px; font-size:12px; }
+ .codex-meta { padding-bottom:10px; }
+ .codex-book>p { font-size:12px; margin:8px 0; }
+ .knowledge-copy p { font-size:14px; }
+}
+.codex-book>p,.codex-meta { flex:none; }
+@media(max-height:450px) {
+ .codex-book { overflow:auto; overscroll-behavior:contain; }
+ .codex-content { overflow:visible; flex:none; }
+}
