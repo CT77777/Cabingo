@@ -177,6 +177,11 @@ try {
   engine.closeDialog(boarding);const guide=boarding.tasks.find(t=>t.id==='guide');guide.done=true;const elder=boarding.boarding.actors[0];elder.status='seated';elder.x=1.25;elder.z=7;
   view.render(boarding,.016);assert(!walker.visible);assert(object('boarding-seated-elder').visible);
   const next=engine.createState({characterMemory:{elder:{helped:true,mistakes:0}}});next.renderTargets=engine.targets(next);view.render(next,.016);assert(object('returning-elder').visible);assert(!object('boarding-seated-elder').visible);
+  // The fixed elder appearance uses the full shared idle/reaction animation path.
+  engine.start(next);view.render(next,.016);const elderHead=object('returning-elder').getObjectByName('head'),baselineHead=elderHead.rotation.x;
+  const beltTask=next.tasks.find(t=>t.id==='belt');beltTask.done=true;next.events.push({seq:++next.eventSeq,type:'complete',taskId:beltTask.id});
+  view.render(next,.016);view.render(next,.1);assert(Math.abs(elderHead.rotation.x-baselineHead)>.05,'returning elder nods on completion');
+  assert(Number.isFinite(elderHead.parent.position.y)&&elderHead.parent.position.y!==0,'returning elder retains finite breathing idle');
   report.checks.push('Boarding standing/seated actors and physical passes follow rule state; evidence labels and returning elder persist across chapters');
   const allGeometry=new Set(),allMaterials=new Set();lastScene.traverse(o=>{if(o.geometry)allGeometry.add(o.geometry);if(o.material)allMaterials.add(o.material);});
   let geometryDisposals=0,materialDisposals=0;

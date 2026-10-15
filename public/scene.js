@@ -448,10 +448,12 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     const closest = [...targets].sort((a,b) => Math.hypot((a.x||0)-(player.x||0),a.z-player.z)-Math.hypot((b.x||0)-(player.x||0),b.z-player.z))[0];
     const selected = targets.find(t => t.id === selectedId) || closest;
     for (const task of tasks) updateTask(records.get(task.id),task,state,selected?.id);
-    for(const [key,actor] of passengers){
+    for(const [key,baseActor] of passengers){
       const [row,i]=key.split('-').map(Number),task=tasks.find(t=>t.row===row&&(t.side==='right'?2:1)===i);
+      const actor=!state.boarding&&task?.characterId==='elder'?returningElder:baseActor;
+      if(actor!==baseActor){baseActor.root.visible=false;actor.root.position.copy(baseActor.root.position);}
       const hazard=task&&hazards.find(h=>h.taskId===task.id&&!h.done);
-      actor.root.visible=!hazard&&(!state.boarding||i===0||i===3)&&task?.characterId!=='elder';
+      actor.root.visible=!hazard&&(!state.boarding||i===0||i===3);
       const selected=task&&selectedId===task.id;
       const r=task&&reactions.get(task.id), reaction=r?{type:r.type,age:visualTime-r.at}:null;
       const mood=task?.done?'happy':task?.late?'waiting':selected?'curious':Math.sin(visualTime*.35+actor.phase)>.55?'happy':actor.style===1?'curious':'neutral';
@@ -483,8 +485,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       if(a.taskId&&(a.taskId!=='seat'||a.id==='seat-owner')){const h=haloFor(a.taskId);h.visible=selected?.id===a.taskId;h.position.set(a.x,2.18,a.z);h.rotation.x=Math.PI/2;}
     }
     const elderTask=!state.boarding&&tasks.find(t=>t.characterId==='elder');
-    returningElder.root.visible=!!elderTask&&!hazards.some(h=>h.taskId===elderTask.id&&!h.done);
-    if(elderTask){returningElder.root.position.set(elderTask.side==='right'?1.25:-1.25,0,elderTask.z);const q=passengerPose({style:2,time:visualTime,selected:selectedId===elderTask.id,reducedMotion});returningElder.head.rotation.x=q.headX;returningElder.head.rotation.y=q.headY;}
+    if(!elderTask)returningElder.root.visible=false;
     crew.position.set(player.x || 0,.13,player.z ?? 1.5); crew.rotation.y = player.angle || 0;
     if (state.status !== 'paused' && !state.dialog && !state.lesson) walkPose = playing && player.walking && !reducedMotion ? Math.sin(player.step || 0) : 0;
     const pose = reducedMotion ? 0 : walkPose; crewBody.position.y = Math.abs(pose)*.035;
