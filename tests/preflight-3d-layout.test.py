@@ -196,7 +196,7 @@ def main():
     check('Focus pause covers the whole viewport above every HUD',computed(away,1512,801,False).get('position')=='fixed' and computed(away,1512,801,False).get('inset')=='0' and int(computed(away,1512,801,False).get('z-index','0'))>20)
     check('Sound controls share one accessible group',by_id('muteButton').getparent() is by_id('volumeSlider').getparent() and by_id('volumeControl').get('role')=='group')
     check('Canvas has keyboard focus and explicit screen-relative instructions',canvas.get('tabindex')=='0' and '螢幕' in canvas.get('aria-label',''))
-    check('Scene, movement controls and guidance retain separate DOM ownership',list(panel)==[by_id('timeWarning'),by_id('aisleAlert'),stage,dock,guidance])
+    check('Scene, movement controls and guidance retain separate DOM ownership',list(panel)==[by_id('timeWarning'),by_id('aisleAlert'),stage,dock,by_id('boardingCoach'),guidance])
     check('Reading surfaces share a separate drawer outside the scene',all(by_id(i).getparent() is aside for i in reading_ids) and aside.getparent() is workspace)
     check('Reading surfaces never reparent or replace the canvas',all(stage not in by_id(i).iterancestors() for i in reading_ids))
     check('Start overlay remains over the cabin before play',by_id('briefCard').getparent() is stage and 'hidden' not in by_id('briefCard').attrib)

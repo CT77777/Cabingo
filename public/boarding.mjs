@@ -23,26 +23,43 @@ export function initBoarding(s){
 }
 export function boardingTaskActor(s,id){return s.boarding?.actors.find(a=>a.taskId===id&&!['pending','seated','exited'].includes(a.status));}
 export function boardingEvidence(t){
- if(t.id==='guide')return [{label:'長輩的登機證',value:'3C · 第 3 排，機艙右側'}];
- if(t.id==='seat')return [
-  {label:'旅客甲 · 登機證',value:'今日 · 4C'},
-  {label:'旅客乙 · 登機證',value:['今日 · 5C','今日 · 4B','明日 · 4C'][t.variant]},
-  {label:'椅背標示',value:'第 4 排 · B 在機艙左側，C 在機艙右側'}
- ];
+ const pass=(owner,seat,day=15)=>({kind:'pass',owner,seat,day,flight:'CP 001',label:`${owner}的登機證`,value:`${day} OCT 2026 · ${seat}`});
+ if(t.id==='guide')return [pass('長輩','3C'),{kind:'map',label:'座位圖'}];
+ if(t.id==='seat')return [pass('旅客甲','4C'),pass('旅客乙',['5C','4B','4C'][t.variant],t.variant===2?16:15),{kind:'map',label:'座位圖'}];
+ if(t.id==='bag')return [{kind:'bins',side:t.side||'left',full:t.variant===1,stowed:t.variant===2,label:'頭頂櫃與走道'}];
+ if(t.id==='family')return [{kind:'family',side:t.side||'left',label:'旅客與手提袋'}];
  return [];
+}
+export function inspectBoardingClue(s,kind){
+ if(s.status!=='playing'||s.lesson||s.recovery||s.dialog?.id!=='guide'||!s.boarding?.coach||!['pass','map'].includes(kind))return false;
+ if(!s.boarding.coach.examined.includes(kind))s.boarding.coach.examined.push(kind);
+ return true;
+}
+export function boardingCoach(s){
+ const b=s.boarding;if(!b?.coach||b.formal||s.status!=='playing'||s.lesson||s.recovery)return null;
+ if(s.dialog?.id==='guide'){
+  const next=!b.coach.examined.includes('pass')?'pass':!b.coach.examined.includes('map')?'map':'choose';
+  return {step:next,title:next==='pass'?'點開登機證，看看座位號':next==='map'?'再看座位圖，找到相同字母':'對照票卡與座位圖，回應長輩',progress:3};
+ }
+ if(s.dialog)return null;
+ if(s.action)return {step:'watch',title:'看看旅客的反應，組員正在協助',progress:b.tutorialStep<2?3:4};
+ if(b.tutorialStep===0)return {step:'move',title:'朝發光的長輩走近',progress:1};
+ if(b.tutorialStep===1)return {step:'interact',title:'按 Space 或互動，和長輩說話',progress:2};
+ if(b.tutorialStep===2)return {step:'bag',title:'讓出走道，再靠近紅色行李標記',progress:4};
+ return {step:'walk',title:'前往第 4 排，準備接手登機',progress:5};
 }
 export function boardingChoices(s,t){
  const mk=(id,label,good,feedback)=>({id,label,good,duration:1.5,tags:[],feedback});
- if(t.id==='guide')return {quote:'第一次搭飛機，3C 是往哪裡走呢？',description:'請看長輩手上的登機證，再對照椅背排號。',choices:[
-  mk('guide','帶您到第 3 排，機艙右側',true,'已替長輩指路，長輩會沿走道入座。'),
-  mk('left','帶您到第 3 排，機艙左側',false,'登機證是 3C，C 在機艙右側。'),
+ if(t.id==='guide')return {quote:'第一次搭飛機，3C 是往哪裡走呢？',description:'',choices:[
+  mk('guide','帶您到第 3 排的 C 座',true,'已替長輩指路，長輩會沿走道入座。'),
+  mk('left','帶您到第 3 排的 B 座',false,'登機證是 3C，C 在機艙右側。'),
   mk('tour','先帶您逛到機尾，再回來找',false,'先對照 3C 的排數與側別，讓長輩直接入座。')
  ]};
  if(t.id==='seat'){
   const labels=['核對排數：乙的座位其實是 5C','核對側別：乙的座位其實是 4B','核對日期：乙持有明日的登機證'];
-  return {quote:'我們都以為這裡是自己的位置。',description:'兩位都指向 4C；請比較兩張登機證的排數、側別與日期。',choices:labels.map((label,i)=>mk(['row','side','date'][i],label,i===t.variant,i===t.variant?(i===2?'已發現日期不符，旅客先回前門重新核對。':'已核對兩張登機證，旅客會移到各自的位置。'):'這個判斷與兩張登機證不一致。請重新核對可見的日期與座位。'))};
+  return {quote:'我們都以為這裡是自己的位置。',description:'',choices:labels.map((label,i)=>mk(['row','side','date'][i],label,i===t.variant,i===t.variant?(i===2?'已發現日期不符，旅客先回前門重新核對。':'已核對兩張登機證，旅客會移到各自的位置。'):'這個判斷與兩張登機證不一致。請重新核對可見的日期與座位。'))};
  }
- if(t.id==='family')return {quote:'我抱著孩子，這些東西有點拿不住。',description:'家長停在走道，手提袋擋在腳邊，座位旁有可用空間。',choices:[
+ if(t.id==='family')return {quote:'我抱著孩子，這些東西有點拿不住。',description:'',choices:[
   mk('assist','先協助收妥手提袋，再讓家長入座',true,'手提袋已收妥，家長正在入座。'),
   mk('sit','請家長先坐，手提袋暫留走道',false,'手提袋仍占用通道；需要先協助安置。'),
   mk('bag-seat','替手提袋找座位，讓家長繼續站著',false,'家長需要協助入座，行李也要收妥。')
@@ -74,13 +91,14 @@ export function tickBoarding(s,dt){
  const b=s.boarding;b.time+=dt;
  if(!b.formal){
   if(b.tutorialStep===0&&s.player.z>=1.95)b.tutorialStep=1;
-  if(b.tutorialStep===3&&Math.hypot(s.player.x,s.player.z-9)<=1.1){b.formal=true;b.tutorialStep=4;for(const t of s.tasks)if(!t.done)t.spawn=s.elapsed;s.feedback='正式登機開始：核對登機證、協助家長，讓所有人就座後回前方回報。';}
+  if(b.tutorialStep===3&&Math.hypot(s.player.x,s.player.z-9)<=1.1&&b.coach&&!b.coach.briefed){b.coach.ready=true;}
+  if(b.tutorialStep===3&&Math.hypot(s.player.x,s.player.z-9)<=1.1&&(!b.coach||b.coach.briefed)){b.formal=true;b.tutorialStep=4;for(const t of s.tasks)if(!t.done)t.spawn=s.elapsed;s.feedback='正式登機開始：核對登機證、協助家長，讓所有人就座後回前方回報。';}
   else s.feedback=BOARDING_TUTORIAL[b.tutorialStep];
  }
  const previous=b.actors.map(a=>[a.x,a.z]);
  for(const a of b.actors){
   if(a.status==='pending'){
-   if(b.tutorialStep<2)continue;
+   if(b.tutorialStep<2||b.coach&&!b.formal)continue;
    if(b.time<a.spawn||b.actors.filter(p=>p.status==='walking').length>=3)continue;
    if(b.actors.some(p=>p!==a&&!['pending','seated','exited'].includes(p.status)&&Math.hypot(a.x-p.x,a.z-p.z)<.65))continue;
    if(Math.hypot(a.x-s.player.x,a.z-s.player.z)<.47)continue;
