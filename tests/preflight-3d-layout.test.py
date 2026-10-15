@@ -196,7 +196,7 @@ def main():
     check('Focus pause covers the whole viewport above every HUD',computed(away,1512,801,False).get('position')=='fixed' and computed(away,1512,801,False).get('inset')=='0' and int(computed(away,1512,801,False).get('z-index','0'))>20)
     check('Sound controls share one accessible group',by_id('muteButton').getparent() is by_id('volumeSlider').getparent() and by_id('volumeControl').get('role')=='group')
     check('Canvas has keyboard focus and explicit screen-relative instructions',canvas.get('tabindex')=='0' and '螢幕' in canvas.get('aria-label',''))
-    check('Scene, movement controls and guidance retain separate DOM ownership',list(panel)==[by_id('aisleAlert'),stage,dock,guidance])
+    check('Scene, movement controls and guidance retain separate DOM ownership',list(panel)==[by_id('timeWarning'),by_id('aisleAlert'),stage,dock,guidance])
     check('Reading surfaces share a separate drawer outside the scene',all(by_id(i).getparent() is aside for i in reading_ids) and aside.getparent() is workspace)
     check('Reading surfaces never reparent or replace the canvas',all(stage not in by_id(i).iterancestors() for i in reading_ids))
     check('Start overlay remains over the cabin before play',by_id('briefCard').getparent() is stage and 'hidden' not in by_id('briefCard').attrib)
@@ -276,7 +276,7 @@ def main():
         check(prefix+' rules are independently bounded and scrollable',css(rules_node).get('overflow')=='auto' and 0<size(css(rules_node)['max-height'],rules_node)<=height*.5)
         touch=root.xpath('//div[@class="touch-pad"]')[0]
         if coarse or width<=700:
-            check(prefix+' visible touch controls retain accessible pointer targets',css(touch).get('display')=='grid' and all(b.get('aria-label') and css(b).get('touch-action')=='none' and size(css(b)['min-height'],b)>=44 for b in touch))
+            check(prefix+' visible touch controls retain accessible pointer targets',css(touch).get('display')=='grid' and by_id('joystick').get('aria-label') and css(by_id('joystick')).get('touch-action')=='none' and size(css(by_id('joystick'))['width'],by_id('joystick'))>=88 and not touch.xpath('.//button'))
         check(prefix+' manual pause shares the centered modal outside the game',by_id('pauseCard').getparent() is away and by_id('focusPauseCard').getparent() is away and css(by_id('pauseCard')).get('width')=='min(100%,360px)' and css(away).get('align-items')=='center' and css(away).get('backdrop-filter')=='blur(8px)')
         for mode,ident in [('decision','decisionCard'),('lesson','lessonCard'),('result','resultCard')]:
             body.set('data-panel',mode);as_=css(aside);card=by_id(ident)

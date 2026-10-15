@@ -158,11 +158,12 @@ try {
   view.render(closeup,.016);const fadeMaterial=object('available-bin').children.find(o=>o.material).material;assert(fadeMaterial.version>0,'fade invalidates opaque shader');const fadeVersion=fadeMaterial.version;view.render(closeup,.016);assert.equal(fadeMaterial.version,fadeVersion,'do not invalidate shader every frame');assert(object('available-bin').children.some(o=>o.material?.opacity<1),'bin fades in safety closeup');
   view.render(makeState(),.016);assert(object('available-bin').children.filter(o=>o.material).every(o=>o.material.opacity===1),'bin opacity restores after closeup');
   const deliveryState=makeState();deliveryState.action={id:77,kind:'task',taskId:'water',time:4,duration:8,choice:{id:'serve'}};
+  deliveryState.action.time=0;view.render(deliveryState,.016);assert(object('service-trolley').visible);assert(object('galley-supply').visible);const initialCup=object('delivery-water');approx(initialCup.position.x,.5,'item begins at trolley');approx(initialCup.position.z,deliveryState.player.z-.6,'item begins inside source beside player');deliveryState.action.time=4;
   view.render(deliveryState,.016);const cup=object('delivery-water');assert(cup.visible);const cupAt=cup.position.clone();
   deliveryState.status='paused';view.render(deliveryState,1);assert(cup.position.equals(cupAt));
   deliveryState.status='playing';deliveryState.action=null;deliveryState.tasks.find(t=>t.id==='water').done=true;view.render(deliveryState,.016);assert(cup.visible);approx(cup.position.x,1.25);
   const colleagueState=makeState();colleagueState.elapsed=4;colleagueState.handoffJob={taskId:'water',remaining:7};
-  view.render(colleagueState,.016);const colleague=object('coworker'),at=colleague.position.clone();assert(at.z>.7&&at.z<2.4);assert(object('coworker-water').visible);
+  view.render(colleagueState,.016);const colleague=object('coworker'),at=colleague.position.clone();assert(at.z>.7&&at.z<2.4);assert(object('delivery-water').visible);
   colleagueState.status='paused';view.render(colleagueState,1);assert(colleague.position.equals(at));
   colleagueState.status='playing';colleagueState.handoffJob.remaining=.5;view.render(colleagueState,.016);assert(object('delivery-water').visible);
   colleagueState.handoffJob=null;const delegatedWater=colleagueState.tasks.find(t=>t.id==='water');delegatedWater.done=true;delegatedWater.handoff=true;delegatedWater.completedAt=12;colleagueState.elapsed=12;const completedLabels=view.render(colleagueState,.016).labels;assert(completedLabels.some(l=>l.id==='coworker'&&l.text.includes('已送達')));
