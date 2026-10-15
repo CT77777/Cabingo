@@ -1,7 +1,7 @@
-import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents} from './preflight.mjs?v=0.2.1';
-import {layoutLabels,crossedMilestones} from './presentation.mjs';
-import {createCabinAudio} from './audio.mjs';
-import {summarizeResult,parseBest,selectBest} from './results.mjs';
+import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents} from './preflight.mjs?v=0.3.0';
+import {layoutLabels,crossedMilestones} from './presentation.mjs?v=0.3.0';
+import {createCabinAudio} from './audio.mjs?v=0.3.0';
+import {summarizeResult,parseBest,selectBest} from './results.mjs?v=0.3.0';
 const $=id=>document.getElementById(id),canvas=$('sceneCanvas');
 const keys=new Set(),touch=new Set(),held=new Set(),choiceBlockedKeys=new Set(),labelElements=new Map();
 const motion=matchMedia('(prefers-reduced-motion: reduce)'),phone=matchMedia('(max-width: 700px)');
@@ -56,7 +56,7 @@ function refresh(force=false){const c=counts(state),panel=panelName(),signature=
  const warnings=state.tasks.filter(t=>t.active&&!t.done&&!t.assigned&&t.warned&&!t.late);
  text('objective',chapterReady(state)?'全部完成，回前方金色圈按 E 回報。':c.hazards?`走道事件 ${c.hazards} 件：靠近紅圈恢復走道。`:warnings.length?`${warnings.map(t=>t.title).join('、')} 等候快到期，請安排回應。`:`檢查 ${c.safety}/3 · 服務 ${c.service}/3 · 完成後回前方回報`);
  text('feedback',panel==='brief'?'選正式巡艙，或先不計時練習。':state.action?.kind==='correction'?state.action.choice.feedback:state.feedback);$('feedback').dataset.kind=state.action?.kind==='correction'?'warning':state.feedbackKind;
- const target=targets(state).find(t=>t.id===state.near);text('interactLabel',state.action?'處理中…':target?target.kind==='hazard'?'恢復走道':target.id==='report'?'回報巡艙':`${target.label} · 互動`:'進入圈內互動');$('interactButton').classList.toggle('near',!!target&&panel==='idle'&&!state.action);$('interactButton').disabled=!ready||state.status!=='playing'||!!state.dialog||!!state.lesson;
+ const target=targets(state).find(t=>t.id===state.near);text('interactLabel',state.action?'處理中…':target?target.kind==='hazard'?'恢復走道':target.id==='report'?'回報巡艙':target.label:'進入圈內互動');$('interactButton').classList.toggle('near',!!target&&panel==='idle'&&!state.action);$('interactButton').disabled=!ready||state.status!=='playing'||!!state.dialog||!!state.lesson;
  $('pauseButton').disabled=!ready||!['playing','paused'].includes(state.status);text('pauseButton',state.status==='paused'?'繼續巡艙':'暫停 / 規則');$('cameraButton').disabled=!ready;$('cameraButton').setAttribute('aria-pressed',String(state.cameraMode==='overview'));text('cameraButton',state.cameraMode==='overview'?'全艙總覽':'巡艙鏡頭');
  hide('actionBox',!state.action);if(state.action){const names={task:'協助旅客',handoff:'安排交接',wait:'說明等候',correction:'修正回饋', 'clear-hazard':'恢復走道'};text('actionLabel',`${names[state.action.kind]||'處理中'} · ${Math.ceil(state.action.duration-state.action.time)} 秒`);}
  text('taskSummary',`${c.pending+c.hazards} 待辦`);const items=[...state.hazards.filter(h=>!h.done).map(h=>({...h,kind:'hazard',title:'恢復走道',active:true})),...state.tasks.filter(t=>t.active).sort((a,b)=>Number(a.done)-Number(b.done)||a.row-b.row)];$('taskList').replaceChildren(...items.map(t=>{const row=document.createElement('div');row.className=`task-row ${t.kind}${t.done?' done':''}${state.near===t.id?' near':''}`;const name=document.createElement('b'),meta=document.createElement('small'),time=document.createElement('span');name.textContent=`${t.kind==='safety'||t.kind==='hazard'?'安全':'服務'} · ${locationText(t)} ${t.title}`;meta.textContent=t.done?(t.handoff?'同事已完成':'已完成'):t.assigned?'同事處理中':t.kind==='hazard'?'靠近紅圈按 E':t.warned&&!t.late?'等候即將到期':t.late?'旅客仍需要服務':'觀察現場再處理';time.textContent=t.done?'✓':t.assigned?`${Math.ceil(state.handoffJob?.remaining||0)}秒`:t.kind==='service'?`${Math.max(0,Math.ceil(t.patience-state.elapsed+t.spawn))}秒`:'!';row.append(name,meta,time);return row;}));
@@ -108,5 +108,5 @@ function updateLabels(labels){
  }for(const [id,e] of labelElements)if(!active.has(id))e.hidden=true;
 }
 function frame(time){const dt=Math.min(Math.max((time-last)/1000,0),.05);last=time;if(ready&&view){const wasAction=state.action,heldDir=d=>keys.has(d)||touch.has(d);tick(state,dt,screenInputToWorld(Number(heldDir('right'))-Number(heldDir('left')),Number(heldDir('up'))-Number(heldDir('down'))));if(wasAction&&!state.action)clearMovement();state.renderTargets=targets(state);try{const visual=view.render(state,dt);updateLabels(visual?.labels||[]);}catch(error){fail(error);}if(ready){syncPresentation();if(state.action)$('actionBar').style.width=`${100*state.action.time/state.action.duration}%`;refresh();}}requestAnimationFrame(frame);}
-async function boot(){try{const {createCabinView}=await import('./scene.js?v=0.2.1');view=createCabinView(canvas,{onContextLost:()=>fail(new Error('WebGL context lost'))});ready=true;hide('loading',true);$('startButton').disabled=false;$('practiceButton').disabled=false;text('startButton','開始正式巡艙 →');refresh(true);requestAnimationFrame(frame);}catch(error){fail(error);}}
+async function boot(){try{const {createCabinView}=await import('./scene.js?v=0.3.0');view=createCabinView(canvas,{onContextLost:()=>fail(new Error('WebGL context lost'))});ready=true;hide('loading',true);$('startButton').disabled=false;$('practiceButton').disabled=false;text('startButton','開始正式巡艙 →');refresh(true);requestAnimationFrame(frame);}catch(error){fail(error);}}
 refresh(true);boot();

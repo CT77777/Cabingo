@@ -11,4 +11,6 @@ const labels=[{id:'a',x:100,y:100,width:32,height:32,selected:true},{id:'b',x:10
 const result=layoutLabels(labels,{width:390,height:844,exclusions:[]});assert.equal(result[0].visible,true);assert.equal(result[1].visible,false);assert.equal(labels[0].visible,undefined);
 assert.equal(layoutLabels(labels,{width:390,height:844,exclusions:[{left:0,right:200,top:0,bottom:200}]}).filter(x=>x.visible).length,0);
 for(const side of ['left','right'])for(const id of ['bag','belt','tray']){const p=decisionPose({player:{x:0,z:6},task:{id,z:7,side,variant:1},aspect:390/844});assert(p.position.every(Number.isFinite));}
+assert.equal(passengerPose({time:1,reducedMotion:true,reaction:{type:'complete',age:.2}}).headX,passengerPose({time:1,reducedMotion:true,reaction:{type:'complete',age:.4}}).headX,'reduced motion has no head nod');
+assert.equal(actionPose({taskId:'bag',choiceId:'stow',progress:.2,reducedMotion:true}).bodyPitch,actionPose({taskId:'bag',choiceId:'stow',progress:.4,reducedMotion:true}).bodyPitch,'reduced motion has no bag bob');
 console.log('PASS poses, reduced motion, milestone selection, label collision and camera contracts');

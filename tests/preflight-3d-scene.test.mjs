@@ -27,7 +27,7 @@ try {
   const transformed=source.replace("import * as THREE from './vendor/three.module.min.js';","import * as Three from './three.module.mjs';\nconst THREE={...Three,WebGLRenderer:globalThis.__CabinMockRenderer};");
   assert.notEqual(transformed,source,'only scene renderer import is replaced');
   fs.writeFileSync(path.join(temp,'scene.mjs'),transformed);
-  const {Box3}=await import(pathToFileURL(path.join(temp,'three.core.mjs')));
+  const {Box3,Vector3,PerspectiveCamera}=await import(pathToFileURL(path.join(temp,'three.core.mjs')));
   const {createCabinView,createProjectionCamera,projectGamePoint,screenInputToWorld,INTERACTION_RADIUS,CABIN_ROWS}=await import(pathToFileURL(path.join(temp,'scene.mjs')));
   assert.deepEqual(CABIN_ROWS,[3,5,7,9,11,13]);assert.equal(INTERACTION_RADIUS,1.1);
   assert.deepEqual(screenInputToWorld(1,1),{x:-1,z:1});
@@ -133,6 +133,18 @@ try {
     s.status='playing';s.dialog=null;s.lesson=null;
   }
   s.reducedMotion=true;view.render(s,.016);approx(body.position.y,0,'reduced motion removes walk bob');
+  const {decisionPose}=await import(pathToFileURL(path.join(temp,'presentation.mjs')));
+  for(const aspect of [390/844,1272/807])for(const side of ['left','right']){
+    const pose=decisionPose({player:{x:0,z:6},task:{id:'bag',z:7,side,variant:1},aspect});
+    const c=new PerspectiveCamera(pose.fov,aspect,.1,110);c.position.set(...pose.position);c.lookAt(...pose.target);c.updateMatrixWorld();
+    for(const point of [[0,.46,7],[-2.3,3,7],[2.3,3,7]]){const v=new Vector3(...point).project(c);assert(Math.abs(v.x)<.95);assert((1-v.y)/2<.58,'bag evidence above bottom choice panel');assert((1-v.y)/2>.13,'evidence below top HUD');}
+  }
+  const checkOnly=makeState(2);checkOnly.action={id:33,kind:'task',taskId:'bag',time:2,duration:4,choice:{id:'check'}};
+  view.render(checkOnly,.016);
+  const checkingCrew=object('player').children[0];assert(Math.abs(checkingCrew.children.find(o=>o.type==='Group'&&o.position.x<0)?.rotation.x||0)<.7,'checking stowed bag does not lift arms overhead');
+  const attending=object('passenger-2-1').getObjectByName('head');
+  assert(attending.rotation.y<0,'left-side passenger looks right toward aisle crew');
+  const reactionState=makeState();reactionState.runId='reaction-test';reactionState.events=[{seq:1,type:'mistake',taskId:'bag'}];view.render(reactionState,0);const headBefore=object('passenger-2-1').getObjectByName('head').rotation.y;view.render(reactionState,.1);assert.notEqual(object('passenger-2-1').getObjectByName('head').rotation.y,headBefore,'selected passenger still shakes head on mistake');
   const closeup=makeState();closeup.dialog={id:'bag'};const elapsedBefore=closeup.elapsed;
   for(let i=0;i<40;i++)view.render(closeup,1/60);
   assert.notEqual(lastCamera.position.x,0,'safety decision moves to shoulder view while reading');

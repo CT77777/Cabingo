@@ -4,10 +4,10 @@ const smooth=n=>{const t=clamp(n);return t*t*(3-2*t);};
 export function passengerPose({style=0,phase=0,time=0,selected=false,reaction=null,reducedMotion=false}={}) {
   const t=reducedMotion?0:time+phase, idle=reducedMotion?0:1;
   const weight=reaction?clamp(1-reaction.age/1.4):0;
-  const wrong=reaction?.type==='mistake', nod=reaction?.type==='complete';
+  const wrong=!reducedMotion&&reaction?.type==='mistake', nod=!reducedMotion&&reaction?.type==='complete';
   return {bodyY:Math.sin(t*1.6)*.012*idle,
     headX:(style===2?.12:0)+Math.sin(t*.7)*.035*idle+(nod?Math.sin(reaction.age*11)*.18*weight:0),
-    headY:selected?0:(style===1?.38:Math.sin(t*.45)*.10)*idle+(wrong?Math.sin(reaction.age*14)*.28*weight:0),
+    headY:(selected?0:(style===1?.38:Math.sin(t*.45)*.10)*idle)+(wrong?Math.sin(reaction.age*14)*.28*weight:0),
     eyeScaleY:!reducedMotion&&t%4.7>4.54?.12:1,
     leftArmX:style===2?-.35:Math.sin(t*.7)*.04*idle,
     rightArmX:style===3?-.28:Math.sin(t*.7+1)*.04*idle,
@@ -16,7 +16,7 @@ export function passengerPose({style=0,phase=0,time=0,selected=false,reaction=nu
 export function actionPose({taskId,choiceId,progress=0,reducedMotion=false}={}) {
   const p=clamp(progress), gesture=reducedMotion?0:Math.sin(Math.PI*smooth(p));
   const check=choiceId==='check', speaking=['wait','handoff','ask','unknown','estimate'].includes(choiceId);
-  return {bodyPitch:taskId==='bag'&&!check?-.18*Math.sin(p*Math.PI*2):0,
+  return {bodyPitch:taskId==='bag'&&!check&&!reducedMotion?-.18*Math.sin(p*Math.PI*2):0,
     leftArmX:check?-.35*gesture:taskId==='bag'?-1.3*gesture:-.65*gesture,
     rightArmX:check?-.4*gesture:taskId==='bag'?-1.7*gesture:-(speaking?.75:1.25)*gesture,
     transfer:check||speaking?0:smooth((p-.12)/.7),gaze:gesture};
@@ -25,8 +25,8 @@ export function decisionPose({player,task,aspect=1.6}) {
   const side=task.side==='right'?1:-1, z=task.z;
   // High shoulder angle keeps hands, floor evidence and bins in the upper scene.
   const wide=task.id==='bag', k=Math.max(1,.95/Math.max(.35,aspect));
-  return {position:[-side*(wide?1.2:.8),(wide?5.8:4.5)*k,z-(wide?6:4.5)*k],
-    target:[wide?0:side*.3,wide?1.7:1.55,z-(wide?1.6:1.2)],fov:wide?55:48};
+  return {position:[-side*(wide?4.4*k:.8),(wide?5.8:4.5)*k,z-(wide?6:4.5)*k],
+    target:[wide?0:side*.3,wide?1.45:1.55,z-(wide?1.6:1.2)],fov:wide?55:48};
 }
 function overlaps(a,b){return a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;}
 export function layoutLabels(labels,{width,height,exclusions=[]}) {

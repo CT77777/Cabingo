@@ -11,3 +11,5 @@ The small walking/proximity-task format was inspired by discussion of
 https://github.com/andyhuo520/grandma-gta . No source code, models, sounds,
 characters, or other assets were copied from that repository.
 All cabin geometry, characters, scenario logic and UI are original for this prototype.
+
+Cabingo v0.3: passenger motion, synthesized Web Audio effects and inline SVG task icons are original procedural work. No external audio files, character models or textures were added.

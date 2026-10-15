@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three.module.min.js';
-import {passengerPose,actionPose,decisionPose} from './presentation.mjs';
+import {passengerPose,actionPose,decisionPose} from './presentation.mjs?v=0.3.0';
 
 // Gameplay and scene share x/z coordinates. Both cameras face +z along the
 // centreline, so screen-right input is world -x, and screen-up is world +z.
@@ -416,7 +416,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       const pose=passengerPose({style:actor.style,phase:actor.phase,time:visualTime,selected,reaction,reducedMotion});
       if(state.status!=='paused'&&!state.lesson){
         actor.body.position.y=pose.bodyY;actor.head.rotation.x=pose.headX;
-        actor.head.rotation.y=selected?Math.atan2(player.x-actor.root.position.x,-(player.z-actor.root.position.z)):pose.headY;
+        actor.head.rotation.y=(selected?Math.atan2(actor.root.position.x-player.x,-(player.z-actor.root.position.z)):0)+pose.headY;
         actor.eyes.forEach(e=>e.scale.y=.024*pose.eyeScaleY);
         actor.brows.forEach((b,i)=>b.rotation.z=(i?1:-1)*pose.browAngle);actor.mouth.rotation.z=pose.smile*.15;
         actor.arms[0].rotation.x=pose.leftArmX;actor.arms[1].rotation.x=pose.rightArmX;
@@ -433,7 +433,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     if (state.status !== 'paused' && !state.dialog && !state.lesson) walkPose = playing && player.walking && !reducedMotion ? Math.sin(player.step || 0) : 0;
     const pose = reducedMotion ? 0 : walkPose; crewBody.position.y = Math.abs(pose)*.035;
     legs[0].rotation.x = pose*.43; legs[1].rotation.x = -pose*.43;
-    const handlingBag = state.action?.taskId === 'bag' && state.action.kind === 'task';
+    const handlingBag = !reducedMotion && state.action?.taskId === 'bag' && state.action.kind === 'task' && state.action.choice?.id!=='check';
     const progress = state.action ? clamp(state.action.time/Math.max(.001,state.action.duration),0,1) : 0;
     arms[0].rotation.x = handlingBag ? -1.35-Math.sin(progress*Math.PI)*.6 : -pose*.32;
     arms[1].rotation.x = handlingBag ? -1.35-Math.sin(progress*Math.PI)*.6 : pose*.32;
@@ -441,7 +441,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       const t=tasks.find(t=>t.id===state.action.taskId);
       if(t){crew.rotation.y=Math.atan2((t.side==='right'?1:-1)*1.25-player.x,t.z-player.z);
         const q=actionPose({taskId:t.id,choiceId:state.action.choice?.id,progress,reducedMotion});
-        if(t.id!=='bag'){arms[0].rotation.x=q.leftArmX;arms[1].rotation.x=q.rightArmX;}
+        if(t.id!=='bag'||state.action.choice?.id==='check'||reducedMotion){arms[0].rotation.x=q.leftArmX;arms[1].rotation.x=q.rightArmX;}
         crewBody.rotation.x=q.bodyPitch;
       }
     }else crewBody.rotation.x=0;
