@@ -1,4 +1,4 @@
-import {CHAPTERS,DEFAULT_CHAPTER_ID,getChapter} from './chapters/index.mjs?v=0.6.1';
+import {CHAPTERS,DEFAULT_CHAPTER_ID,getChapter} from './chapters/index.mjs?v=0.7.1';
 
 export const CAMPAIGN_STORAGE_KEY='cabin3d-campaign-v2';
 export const CHARACTER_IDS=Object.freeze(['elder','business','parent','student','regular','purser']);

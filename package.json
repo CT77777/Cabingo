@@ -1,6 +1,6 @@
 {
   "name": "cabingo",
-  "version": "0.6.1",
+  "version": "0.7.1",
   "private": true,
   "description": "Cabingo 3D boarding tutorial and preflight browser game",
   "engines": {
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "python3 -m http.server 4173 --bind 127.0.0.1 -d public",
     "build": "node build.cjs",
-    "test": "node tests/aisle-polish.test.mjs && node tests/interaction.test.mjs && node tests/boarding.test.mjs && node tests/chapters.test.mjs && node tests/campaign.test.mjs && node tests/preflight-3d.test.mjs && node tests/preflight-3d-input.test.cjs && node tests/preflight-3d-scene.test.mjs && node tests/hands-on.test.mjs && node tests/events.test.mjs && node tests/presentation.test.mjs && node tests/audio.test.mjs && node tests/results.test.mjs",
+    "test": "node tests/aisle-polish.test.mjs && node tests/learning.test.mjs && node tests/interaction.test.mjs && node tests/boarding.test.mjs && node tests/chapters.test.mjs && node tests/campaign.test.mjs && node tests/preflight-3d.test.mjs && node tests/preflight-3d-input.test.cjs && node tests/preflight-3d-scene.test.mjs && node tests/hands-on.test.mjs && node tests/events.test.mjs && node tests/presentation.test.mjs && node tests/audio.test.mjs && node tests/results.test.mjs",
     "test:layout": "python3 tests/preflight-3d-layout.test.py",
     "test:all": "npm test && npm run test:layout"
   }

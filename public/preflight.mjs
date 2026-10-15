@@ -1,5 +1,5 @@
-import {initBoarding,tickBoarding,boardingChoices,boardingPassable,boardingTaskComplete,boardingReady,boardingTaskActor} from './boarding.mjs?v=0.6.1';
-import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=0.6.1';
+import {initBoarding,tickBoarding,boardingChoices,boardingPassable,boardingTaskComplete,boardingReady,boardingTaskActor} from './boarding.mjs?v=0.7.1';
+import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=0.7.1';
 // Pure, deterministic preflight game state. This is a fictional game,
 // not aviation training or a representation of real operating procedures.
 export const WORLD = Object.freeze({
@@ -81,7 +81,7 @@ export function createState(options = {}) {
     characterMemory:options?.characterMemory&&typeof options.characterMemory==='object'?options.characterMemory:{},
     cameraMode: 'follow', reducedMotion: false,
     player: { x: 0, z: 1.5, angle: 0, walking: false, step: 0 },
-    tasks, hazards: [], hazardsCleared: 0, handoffTokens: chapter.handoffTokens, handoffJob: null,
+    tasks, encounters:[], judgments:[], hazards: [], hazardsCleared: 0, handoffTokens: chapter.handoffTokens, handoffJob: null,
     safety: 100, comfort: 80, safetyErrors: 0, mistakes: 0, servicePenalty: 0,
     dialog: null, action: null, lesson: null, lessonSeen: [], decisionSerial: 0,
     feedback: 'WASD / 方向鍵走動，靠近標記按空白鍵。先觀察，再選擇處理。',
@@ -250,6 +250,7 @@ export function interact(s) {
   }
   const task = s.tasks.find(t => t.id === s.near && t.active && !t.done && !t.assigned);
   if (!task) { feedback(s, '靠近座位旁的標記，按空白鍵 查看情境。'); return false; }
+  if(!s.encounters.includes(task.id))s.encounters.push(task.id);
   s.dialog = choicesFor(s, task); s.player.walking = false; return true;
 }
 export function closeDialog(s) {
@@ -263,6 +264,10 @@ export function choose(s, index) {
   const t = s.tasks.find(t => t.id === s.dialog.id), choice = s.dialog.choices[index];
   if (!t || !choice) return false;
   if(choice.leave){s.dialog=null;s.player.walking=false;feedback(s,'先處理走道行李，再回來完成服務。');return true;}
+  let judgment=s.judgments.find(j=>j.taskId===t.id);
+  if(!judgment){judgment={taskId:t.id,title:t.title,variant:t.variant,context:s.dialog.description,attempts:0,incorrect:0};s.judgments.push(judgment);}
+  judgment.context=s.dialog.description;judgment.mode=s.practice?'practice':s.boarding&&!s.boarding.formal?'tutorial':'formal';
+  judgment.attempts++;if(!choice.good)judgment.incorrect++;judgment.choiceId=choice.id;judgment.choiceLabel=choice.label;judgment.good=choice.good;judgment.feedback=choice.feedback;
   emit(s,'choice',t.id,{choiceId:choice.id});
   if(!choice.good)emit(s,'mistake',t.id,{choiceId:choice.id});
   const decision = s.dialog;

@@ -15,3 +15,5 @@ All cabin geometry, characters, scenario logic and UI are original for this prot
 Cabingo v0.3: passenger motion, synthesized Web Audio effects and inline SVG task icons are original procedural work. No external audio files, character models or textures were added.
 
 Cabingo v0.4: the eight-bar lounge piano loop is original synthesized music, generated locally with Web Audio. No recordings or third-party music were added.
+
+Card illustrations: public/assets/cards/*.svg are original vector artwork created for Cabingo. They contain no third-party logos, photographs, fonts, or embedded resources.
