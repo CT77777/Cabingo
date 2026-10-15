@@ -1,4 +1,4 @@
-# Cabingo 0.5.2：走道引導與對話精簡驗證
+# Cabingo 0.6.1：走道引導與對話精簡驗證
 
 ## 修改結果
 
@@ -22,7 +22,7 @@ npm run build
 git diff --check
 ```
 
-包含 81 項規則、76 項實際 production controller 的 VM 測試、310 項靜態 viewport/layout 檢查，以及其他既有測試。新增針對性測試涵蓋無法交接、等候用途、免費離開、餐車距離、實際移動回座、站著等待不會完成、暫停／取消／逾時／目標遭阻擋。Three 場景測試使用真實幾何與相機、替換 WebGLRenderer，涵蓋光點投影及回座模型交替；不能取代 GPU 或真實手機測試。
+包含 81 項規則、82 項實際 production controller 的 VM 測試、310 項靜態 viewport/layout 檢查，以及其他既有測試。新增針對性測試涵蓋無法交接、等候用途、免費離開、餐車距離、實際移動回座、站著等待不會完成、暫停／取消／逾時／目標遭阻擋。Three 場景測試使用真實幾何與相機、替換 WebGLRenderer，涵蓋光點投影及回座模型交替；不能取代 GPU 或真實手機測試。
 
 ## 瀏覽器驗收
 
@@ -34,6 +34,8 @@ Chrome 本機 http://127.0.0.1:4175/：
 - 第一個走道事件置中說明，確認後才繼續；開始引導後無 loading，站著等待保持事件。方向鍵走到光點後走道事件數下降，水的服務需求仍未完成。
 - 瀏覽器未擷取到 console error。預覽已暫停，測試用 viewport override 已復原。
 
+整合最新版後，另在瀏覽器重跑登機移動、Space 對話，確認登機證線索卡保留、沒有巡艙服務示範阻擋，且未擷取到 console error。整合版截圖：cabingo-aisle-integrated-boarding.png。
+
 截圖存於任務 outputs：cabingo-aisle-dialogue.png、cabingo-aisle-mobile-dialogue.png、cabingo-aisle-mobile-tutorial.png、cabingo-aisle-centered-lesson.png、cabingo-aisle-escort.png。
 
 ## Claude Code 討論與審查
@@ -41,5 +43,7 @@ Chrome 本機 http://127.0.0.1:4175/：
 先以需求摘要討論玩法，再由同一 Codex 代理實作。Claude Code 建議採有安全終點與取消方式的移動引導，並用開場操作示範解釋耐心與背景交接。
 
 推送前以公開專案的本次 patch 與針對性測試交由 Claude Code 審查。第一輪發現服務被阻擋時缺少免費出口、教學焦點和長按問題，均已補上。複審結果為 PASS / no blockers；另三項小建議（上方取消說明、免費出口完整分數斷言、取消後焦點）也已修正並獲確認。Claude Code 僅閱讀所提供差異，測試由 Codex 在本機執行。
+
+已整合 main 的 PR #3 登機教學（898dffd），保留登機證線索卡、人流、長輩跨章節記憶及章節存檔。新增服務示範限起飛前巡艙；登機教學不會被額外示範阻擋。整合後包含登機完整路線的測試再次通過。
 
 沿用 legacy hands-on 規則 API；新移動引導及開場教學僅作用於 contextual 3D 模式。未更動其他工作目錄，未直接推送或合併 main。

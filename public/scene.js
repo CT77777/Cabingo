@@ -1,5 +1,6 @@
+import {boardingTaskActor,boardingEvidence} from './boarding.mjs?v=0.6.1';
 import * as THREE from './vendor/three.module.min.js';
-import {passengerPose,actionPose,serviceItemPose,trolleyPresentation,GALLEY_SUPPLY,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.5.2';
+import {passengerPose,actionPose,serviceItemPose,trolleyPresentation,GALLEY_SUPPLY,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.6.1';
 
 // Gameplay and scene share x/z coordinates. Both cameras face +z along the
 // centreline, so screen-right input is world -x, and screen-up is world +z.
@@ -183,6 +184,20 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     seat(x,z);const actor=passenger(scene,x,z,shirts[(row+i)%6],['skinA','skinB','skinC'][(row+i)%3],i%2?'deep':'hair',(row+i)%4);
     actor.root.name=`passenger-${row}-${i}`;passengers.set(`${row}-${i}`,actor);
   }
+  const boardingActors=new Map();
+  function traveler(id,elder=false){
+    if(!boardingActors.has(id)){
+      const options=elder?['gold','skinC','#8d8d83',2]:[shirts[boardingActors.size%6],'skinA','hair',boardingActors.size%4];
+      const standing=passenger(scene,0,0,...options,true),seated=passenger(scene,0,0,...options,false);
+      standing.root.name=`boarding-walking-${id}`;seated.root.name=`boarding-seated-${id}`;
+      const card=group(standing.body);box('cream',[0,1.02,-.34],[.34,.22,.025],[0,0,0],card);box('mint',[-.12,1.02,-.36],[.04,.18,.012],[0,0,0],card);box('navy',[.02,1.05,-.36],[.16,.025,.014],[0,0,0],card);
+      let familyBag=null;if(id==='parent'){box('blue',[.12,1.07,-.29],[.24,.25,.17],[0,0,.2],standing.body);ball('skinC',[.12,1.24,-.30],[.10,.11,.10],[0,0,0],standing.body);familyBag=luggage(standing.root,'orange',.45);familyBag.position.set(-.34,-.08,-.12);}
+      boardingActors.set(id,{standing,seated,card,familyBag});
+    }
+    return boardingActors.get(id);
+  }
+  for(const id of ['elder','bag-owner','seat-owner','seat-misread','parent','extra-a','extra-b'])traveler(id,id==='elder');
+  const returningElder=passenger(scene,0,0,'gold','skinC','#8d8d83',2);returningElder.root.name='returning-elder';
   for (const [material, batch] of staticBatches) {
     const geometry = ownGeometry(new THREE.BufferGeometry());
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(batch.positions, 3)); geometry.setAttribute('normal', new THREE.Float32BufferAttribute(batch.normals, 3));
@@ -422,6 +437,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     if (disposed) return {labels:[]}; resize();
     const player = state.player || {x:0,z:1.5,angle:0,walking:false,step:0};
     const playing = state.status === 'playing' && !state.dialog && !state.lesson, reducedMotion = Boolean(state.reducedMotion);
+    for(const halo of halos.values())halo.visible=false;
     const tasks = state.tasks || [], hazards = state.hazards || [];
     lastTasks=tasks;syncTasks(tasks); syncHazards(hazards);
     if(state.runId!==eventRun){eventRun=state.runId;eventSeq=0;reactions.clear();visualTime=0;}
@@ -434,10 +450,12 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     const closest = [...targets].sort((a,b) => Math.hypot((a.x||0)-(player.x||0),a.z-player.z)-Math.hypot((b.x||0)-(player.x||0),b.z-player.z))[0];
     const selected = targets.find(t => t.id === selectedId) || closest;
     for (const task of tasks) updateTask(records.get(task.id),task,state,selected?.id);
-    for(const [key,actor] of passengers){
+    for(const [key,baseActor] of passengers){
       const [row,i]=key.split('-').map(Number),task=tasks.find(t=>t.row===row&&(t.side==='right'?2:1)===i);
+      const actor=!state.boarding&&task?.characterId==='elder'?returningElder:baseActor;
+      if(actor!==baseActor){baseActor.root.visible=false;actor.root.position.copy(baseActor.root.position);}
       const hazard=task&&hazards.find(h=>h.taskId===task.id&&!h.done);
-      const returning=task&&hazards.find(h=>h.taskId===task.id&&h.done&&Number.isFinite(h.returnedAt)&&state.elapsed-h.returnedAt<.6);actor.root.visible=!hazard&&!returning;
+      const returning=task&&hazards.find(h=>h.taskId===task.id&&h.done&&Number.isFinite(h.returnedAt)&&state.elapsed-h.returnedAt<.6);actor.root.visible=!hazard&&!returning&&(!state.boarding||i===0||i===3);
       const selected=task&&selectedId===task.id;
       const r=task&&reactions.get(task.id), reaction=r?{type:r.type,age:visualTime-r.at}:null;
       const mood=task?.done?'happy':task?.late?'waiting':selected?'curious':Math.sin(visualTime*.35+actor.phase)>.55?'happy':actor.style===1?'curious':'neutral';
@@ -466,6 +484,19 @@ export function createCabinView(canvas, { onContextLost } = {}) {
         r.group.position.set((h.x||0)+(d?dx/d*shift:0),.02,h.z+(d?dz/d*shift:0));r.actor.root.rotation.y=Math.atan2(dx,-dz);r.actor.arms[1].rotation.x=escort&&activeHazard===h?-.6:0;r.actor.brows.forEach((b,i)=>b.rotation.z=(i?1:-1)*.22);
       }else r.group.visible=false;
     }
+    for(const pair of boardingActors.values()){pair.standing.root.visible=false;pair.seated.root.visible=false;}
+    for(const a of state.boarding?.actors||[]){
+      if(['pending','exited'].includes(a.status))continue;
+      const pair=traveler(a.id,a.elder),actor=a.status==='seated'?pair.seated:pair.standing;
+      actor.root.visible=true;actor.root.position.set(a.x,a.status==='seated'?0:.5,a.z);
+      actor.root.rotation.y=a.status==='seated'?0:a.status==='waiting'?Math.atan2(a.x-player.x,-(player.z-a.z)):(a.angle??Math.PI);
+      const stride=!reducedMotion&&a.status==='walking'?Math.sin(a.distance*7)*.10:0;
+      actor.body.position.y=Math.abs(stride)*.12;actor.arms[0].rotation.x=stride;actor.arms[1].rotation.x=-stride;
+      pair.card.visible=a.id!=='parent'&&(a.status==='waiting'||state.dialog?.id===a.taskId);if(pair.familyBag)pair.familyBag.visible=!tasks.find(t=>t.id==='family')?.done;
+      if(a.taskId&&(a.taskId!=='seat'||a.id==='seat-owner')){const h=haloFor(a.taskId);h.visible=selected?.id===a.taskId;h.position.set(a.x,2.18,a.z);h.rotation.x=Math.PI/2;}
+    }
+    const elderTask=!state.boarding&&tasks.find(t=>t.characterId==='elder');
+    if(!elderTask)returningElder.root.visible=false;
     crew.position.set(player.x || 0,.13,player.z ?? 1.5); crew.rotation.y = player.angle || 0;
     if (state.status !== 'paused' && !state.dialog && !state.lesson) walkPose = playing && player.walking && !reducedMotion ? Math.sin(player.step || 0) : 0;
     const pose = reducedMotion ? 0 : walkPose; crewBody.position.y = Math.abs(pose)*.035;
@@ -503,7 +534,8 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     }
     const mode = state.cameraMode === 'overview' ? 'overview' : 'follow';
     const decisionTask=tasks.find(t=>t.id===state.dialog?.id);
-    const cameraPose = decisionTask ? decisionPose({player,task:decisionTask,aspect:camera.aspect}) : getCabinCameraPose(mode,player,camera.aspect);
+    const decisionActor=decisionTask&&boardingTaskActor(state,decisionTask.id);
+    const cameraPose = decisionTask ? decisionPose({player,task:state.boarding&&decisionActor&&decisionTask.id!=='bag'?{...decisionTask,z:decisionActor.z,side:decisionActor.x>=0?'right':'left'}:decisionTask,aspect:camera.aspect}) : getCabinCameraPose(mode,player,camera.aspect);
     wantedPosition.set(...cameraPose.position); wantedTarget.set(...cameraPose.target);
     const ease = firstFrame || resized || reducedMotion || previousMode !== mode ? 1 : state.status === 'paused' || state.lesson || (state.dialog&&!decisionTask) ? 0 : 1-Math.exp(-Math.min(Math.max(dt,0),.1)*7);
     camera.position.lerp(wantedPosition,ease); cameraTarget.lerp(wantedTarget,ease);
@@ -524,12 +556,13 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     firstFrame = false; resized=false; previousMode = mode; renderer.render(scene,camera);
     const labels = targets.filter(target=>(target.id!=='report'||Math.hypot(player.x||0,target.z-player.z)<2)&&(!decisionTask||target.id===decisionTask.id)).map(target => {
       const task=tasks.find(t=>t.id===target.id), hazard=hazards.find(h=>h.id===target.id);
-      const actor=task&&passengers.get(`${task.row}-${task.side==='right'?2:1}`);
+      const boarder=task&&boardingTaskActor(state,task.id),pair=boarder&&boardingActors.get(boarder.id);
+      const actor=task&&(pair?.standing||(task.characterId==='elder'&&!state.boarding?returningElder:passengers.get(`${task.row}-${task.side==='right'?2:1}`)));
       const head=actor?.head.getWorldPosition(new THREE.Vector3());
       const anchor=head?{x:head.x,y:head.y+.31,z:head.z}:{x:target.id==='report'?.65:target.x||0,y:hazard?2.45:.5,z:target.z};
       return {id:target.id,text:task?.title||target.label||target.id,anchor,
         ...projectGamePoint(camera,anchor,sizeWidth,sizeHeight),
-        icon:target.kind==='hazard'?'alert':task?.id==='water'?'water':task?.id==='blanket'?'blanket':task?.id==='question'?'question':target.kind==='report'?'report':'alert',
+        icon:target.kind==='hazard'?'alert':task?.id==='water'?'water':task?.id==='blanket'?'blanket':['question','guide','family'].includes(task?.id)?'question':target.kind==='report'?'report':'alert',
         kind:target.kind||'safety',distance:Math.hypot((target.x||0)-player.x,target.z-player.z),
         near:target.id===(typeof state.near==='string'?state.near:state.near?.id),selected:target.id===selected?.id};
     });
@@ -549,7 +582,15 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       labels.push({id:'question-board',text:questionRecord.variant === 0 ? '尚無確認預估' : '預估稍後 · 可能調整',
         ...projectGamePoint(camera,{x:questionRecord.x+questionRecord.side*.30,y:1.55,z:questionRecord.z-.43},sizeWidth,sizeHeight),kind:'detail',near:false,selected:false});
     }
-    const speakerTask=tasks.find(t=>t.id===state.dialog?.id),speakerActor=speakerTask&&passengers.get(`${speakerTask.row}-${speakerTask.side==='right'?2:1}`);
+    if(state.boarding){
+      for(const [row,z] of CABIN_ROWS.entries())if(Math.abs(z-player.z)<3.1||state.dialog?.id==='guide'&&row===2)labels.push({id:`boarding-seat-row-${row}`,text:`第 ${row+1} 排 · B 左 / C 右`,...projectGamePoint(camera,{x:1.9,y:1.7,z},sizeWidth,sizeHeight),kind:'detail',near:false,selected:false});
+      const task=tasks.find(t=>t.id===selectedId),actor=task&&boardingTaskActor(state,task.id);
+      if(task&&actor)for(const [i,card] of boardingEvidence(task).slice(0,2).entries()){
+        const speaker=i===1?state.boarding.actors.find(a=>a.id==='seat-misread'):actor;
+        labels.push({id:`boarding-pass-${i}`,text:card.value,...projectGamePoint(camera,{x:speaker.x,y:2.45,z:speaker.z},sizeWidth,sizeHeight),kind:'detail',near:false,selected:false});
+      }
+    }
+    const speakerTask=tasks.find(t=>t.id===state.dialog?.id),speakerActor=speakerTask&&(state.boarding?boardingActors.get(boardingTaskActor(state,speakerTask.id)?.id)?.standing:speakerTask.characterId==='elder'?returningElder:passengers.get(`${speakerTask.row}-${speakerTask.side==='right'?2:1}`));
     const speaker=speakerActor?projectGamePoint(camera,{x:speakerActor.root.position.x,y:1.95,z:speakerActor.root.position.z},sizeWidth,sizeHeight):null;
     if(escort)labels.push({id:'escort-goal',text:'走到這裡',...projectGamePoint(camera,{x:escort.goal.x,y:.35,z:escort.goal.z},sizeWidth,sizeHeight),kind:'detail',near:true,selected:true});
     return {labels,speaker,selectedId:selected?.id || null};
