@@ -50,16 +50,16 @@ export function boardingCoach(s){
 }
 export function boardingChoices(s,t){
  const mk=(id,label,good,feedback)=>({id,label,good,duration:1.5,tags:[],feedback});
- if(t.id==='guide')return {quote:'第一次搭飛機，3C 是往哪裡走呢？',description:'',choices:[
+ if(t.id==='guide')return {quote:'第一次搭飛機，3C 是往哪裡走呢？',description:'請看長輩手上的登機證，再對照椅背排號。',choices:[
   mk('guide','帶您到第 3 排的 C 座',true,'已替長輩指路，長輩會沿走道入座。'),
   mk('left','帶您到第 3 排的 B 座',false,'登機證是 3C，C 在機艙右側。'),
   mk('tour','先帶您逛到機尾，再回來找',false,'先對照 3C 的排數與側別，讓長輩直接入座。')
  ]};
  if(t.id==='seat'){
   const labels=['核對排數：乙的座位其實是 5C','核對側別：乙的座位其實是 4B','核對日期：乙持有明日的登機證'];
-  return {quote:'我們都以為這裡是自己的位置。',description:'',choices:labels.map((label,i)=>mk(['row','side','date'][i],label,i===t.variant,i===t.variant?(i===2?'已發現日期不符，旅客先回前門重新核對。':'已核對兩張登機證，旅客會移到各自的位置。'):'這個判斷與兩張登機證不一致。請重新核對可見的日期與座位。'))};
+  return {quote:'我們都以為這裡是自己的位置。',description:'兩位都指向 4C；請比較兩張登機證的排數、側別與日期。',choices:labels.map((label,i)=>mk(['row','side','date'][i],label,i===t.variant,i===t.variant?(i===2?'已發現日期不符，旅客先回前門重新核對。':'已核對兩張登機證，旅客會移到各自的位置。'):'這個判斷與兩張登機證不一致。請重新核對可見的日期與座位。'))};
  }
- if(t.id==='family')return {quote:'我抱著孩子，這些東西有點拿不住。',description:'',choices:[
+ if(t.id==='family')return {quote:'我抱著孩子，這些東西有點拿不住。',description:'家長停在走道，手提袋擋在腳邊，座位旁有可用空間。',choices:[
   mk('assist','先協助收妥手提袋，再讓家長入座',true,'手提袋已收妥，家長正在入座。'),
   mk('sit','請家長先坐，手提袋暫留走道',false,'手提袋仍占用通道；需要先協助安置。'),
   mk('bag-seat','替手提袋找座位，讓家長繼續站著',false,'家長需要協助入座，行李也要收妥。')

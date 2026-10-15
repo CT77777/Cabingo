@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {awardChapterCards,parseCodex} from '../public/learning.mjs';
 import {createState,start,tick,interact,choose,closeDialog,pause,resume,canStand,chapterReady,targets,ackRecovery,dismissLesson} from '../public/preflight.mjs';
 import {boardingEvidence,boardingPassable,boardingTaskActor,boardingTaskComplete,inspectBoardingClue} from '../public/boarding.mjs';
 const copy=x=>JSON.parse(JSON.stringify(x));
@@ -56,6 +57,6 @@ const retreat=create(7);for(const a of retreat.boarding.actors)a.status='seated'
 const deadline=create();deadline.boarding.formal=true;deadline.elapsed=89.95;deadline.action={kind:'task',taskId:'seat',time:1.49,duration:1.5,choice:{}};tick(deadline,.1);assert.equal(deadline.endReason,'timeout');assert(!deadline.tasks.find(t=>t.id==='seat').done);
 console.log('PASS boarding tutorial, full walking routes, paused traffic, three seat variants, congestion hysteresis, collisions, reduced motion and deadline');
 
-let guidedMaxTime=0;for(let seed=0;seed<12;seed++){const r=create(seed,false,true);complete(r,'guide');complete(r,'bag');assert(!r.boarding.formal);complete(r,'seat');complete(r,'family');walk(r,1.5);for(let i=0;i<300&&!chapterReady(r);i++)tick(r,.1);assert(chapterReady(r),`guided boarding seed${seed}`);interact(r);assert.equal(r.endReason,'complete');assert.equal(r.grade,'clean');guidedMaxTime=Math.max(guidedMaxTime,r.elapsed);assert(r.elapsed<=80,'guided route leaves time to spare');}
+let guidedMaxTime=0;for(let seed=0;seed<12;seed++){const r=create(seed,false,true);complete(r,'guide');complete(r,'bag');assert(!r.boarding.formal);complete(r,'seat');complete(r,'family');walk(r,1.5);for(let i=0;i<300&&!chapterReady(r);i++)tick(r,.1);assert(chapterReady(r),`guided boarding seed${seed}`);interact(r);assert.equal(r.endReason,'complete');assert.equal(r.grade,'clean');assert.equal(awardChapterCards(parseCodex(null),r).unlockedIds.length,4,'guided formal completion awards four boarding cards');assert(r.judgments.every(j=>j.context.trim()),'all guided review records retain context');guidedMaxTime=Math.max(guidedMaxTime,r.elapsed);assert(r.elapsed<=80,'guided route leaves time to spare');}
 console.log('Guided route maximum time:',guidedMaxTime.toFixed(2));
 console.log('PASS guided boarding full walking routes, evidence inspection, briefing, formal completion and report');

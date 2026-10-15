@@ -608,3 +608,105 @@ button.visual-clue { position:relative; }
 button.visual-clue[data-revealed=false]>span { visibility:hidden; }
 button.visual-clue[data-revealed=false]:after { content:'▤\a查看登機證'; white-space:pre; position:absolute; inset:0; display:grid; place-content:center; text-align:center; color:#315e58; background:#d9e9df; font-size:18px; line-height:2; }
 button.clue-map[data-revealed=false]:after { content:'▦\a查看座位圖'; }
+/* Optional learning layer: a cabin field notebook, separate from the live HUD. */
+.codex-launch { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.codex-launch span { color:var(--mint); font-variant-numeric:tabular-nums; }
+.codex-overlay { position:fixed; inset:0; z-index:180; display:grid; place-items:center; padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); background:#0b202bc9; backdrop-filter:blur(8px); }
+.codex-book { display:flex; flex-direction:column; width:min(780px,100%); max-height:100%; overflow:hidden; padding:26px; border:1px solid #a8dfcb66; border-radius:16px; background:#17353f; box-shadow:0 24px 70px #07151f77; color:#eaf1e8; }
+.codex-header { display:flex; align-items:center; justify-content:space-between; gap:16px; flex:none; }
+.codex-header h2 { margin:6px 0; font-size:28px; }
+.codex-header button { min-height:44px; flex:none; }
+.codex-book>p { font-size:13px; line-height:1.7; margin:10px 0; }
+.codex-meta { display:flex; flex-wrap:wrap; gap:8px 16px; padding:10px 0 16px; border-bottom:1px solid #a8dfcb44; }
+.codex-meta strong { color:var(--gold); font-size:14px; }
+.codex-meta small { color:#c1d8d0; font-size:12px; }
+.codex-content { overflow:auto; overscroll-behavior:contain; min-height:0; padding-right:8px; scrollbar-gutter:stable; }
+.codex-content section>h3 { font-size:13px; color:var(--mint); letter-spacing:.12em; margin:20px 0 10px; }
+.knowledge-card { border:1px solid #a8dfcb55; border-radius:8px; margin:8px 0; background:#213f48; overflow:hidden; }
+.knowledge-card>summary { padding:14px; cursor:pointer; min-height:44px; font-size:15px; font-weight:700; }
+.knowledge-card[open]>summary { color:var(--gold); border-bottom:1px solid #a8dfcb33; }
+.knowledge-card.locked { border-style:dashed; background:#163039; padding:14px; }
+.knowledge-card.locked p { margin:0 0 6px; color:#c2d3cc; font-size:14px; }
+.knowledge-card.locked small { display:block; color:#b8cbc4; font-size:12px; line-height:1.6; }
+.knowledge-copy { padding:4px 14px 14px; }
+.knowledge-copy p { font-size:14px; line-height:1.8; margin:12px 0; color:#e5eee5; }
+.knowledge-copy small { display:block; font-size:12px; line-height:1.7; color:#bdd5cc; }
+.knowledge-copy .knowledge-review { display:inline-block; color:var(--gold); border:1px solid #edcc9155; border-radius:4px; padding:2px 7px; margin-bottom:8px; }
+.knowledge-copy a { display:block; color:var(--mint); padding:8px 0; text-underline-offset:3px; overflow-wrap:anywhere; font-size:12px; line-height:1.7; }
+.knowledge-copy p.source-note { font-size:12px; color:#c3d5cc; }
+.codex-book>p.codex-disclaimer { flex:none; font-size:12px; color:#c3d5cc; border-top:1px solid #a8dfcb33; padding-top:12px; margin-bottom:0; }
+.review-details { border-top:1px solid #a8dfcb55; border-bottom:1px solid #a8dfcb55; margin:14px 0 8px; }
+.review-details>summary { cursor:pointer; color:var(--mint); padding:12px 0; font-size:13px; min-height:44px; }
+.judgment { padding:12px 0; border-top:1px solid #a8dfcb33; }
+.judgment>summary { cursor:pointer; color:var(--gold); font-size:13px; min-height:44px; padding:10px 0; }
+.judgment h3 { font-size:14px; }
+.judgment .knowledge-copy { padding:0; }
+#judgmentList p { font-size:13px; line-height:1.75; }
+@media(max-width:600px) {
+ .codex-overlay { padding:10px; }
+ .codex-book { padding:16px; border-radius:12px; }
+ .codex-header { gap:8px; }
+ .codex-header h2 { font-size:23px; }
+ .codex-header button { padding:8px 12px; font-size:12px; }
+ .codex-meta { padding-bottom:10px; }
+ .codex-book>p { font-size:12px; margin:8px 0; }
+ .knowledge-copy p { font-size:14px; }
+}
+.codex-book>p,.codex-meta { flex:none; }
+@media(max-height:450px) {
+ .codex-book { overflow:auto; overscroll-behavior:contain; }
+ .codex-content { overflow:visible; flex:none; }
+}
+
+/* Illustrated flight keepsakes: warm paper, route-grid artwork and completion stamps. */
+.codex-book { width:min(1040px,100%); background:#18353e; }
+.codex-header h2 { letter-spacing:.06em; }
+.collection-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; padding:2px 2px 18px; }
+.collection-card { min-width:0; overflow:hidden; border-radius:12px; background:#f4ecd8; color:#183e46; border:1px solid #d5c49e; box-shadow:0 7px 18px #071c2933; }
+.collection-card.just-earned { outline:2px solid var(--gold); outline-offset:2px; }
+.flight-card-art { position:relative; overflow:hidden; aspect-ratio:16/9; background:#234753; }
+.flight-card-art img { display:block; width:100%; height:100%; object-fit:cover; }
+.flight-card-number { position:absolute; top:12px; left:12px; padding:4px 7px; border:1px solid #e6ce9a77; border-radius:4px; background:#173d4abc; color:#f5e3b9; font:600 11px ui-monospace,monospace; letter-spacing:.15em; }
+.flight-card-copy { position:relative; padding:19px 22px 18px; border-top:1px dashed #c9b38b; }
+.flight-card-kicker { display:block; color:#506d6a; font:600 9px ui-monospace,monospace; letter-spacing:.16em; line-height:1.7; }
+.flight-card-copy h3 { font-size:21px; line-height:1.4; margin:8px 0 12px; font-weight:800; color:#183e46; }
+.flight-card-copy p { font-size:14px; line-height:1.85; margin:0 0 16px; color:#365358; }
+.flight-card-stamp { display:inline-block; padding:4px 9px; border:1px solid #3f8071; color:#286455; border-radius:4px; font-size:11px; letter-spacing:.08em; transform:rotate(-3deg); }
+.card-reference { border-top:1px solid #d6c6a5; background:#eae1cc; }
+.card-reference>summary { padding:13px 22px; min-height:44px; cursor:pointer; font-size:12px; color:#365358; }
+.card-reference .knowledge-copy p,.card-reference .knowledge-copy small { color:#365358; }
+.card-reference .knowledge-copy { padding:0 22px 18px; }
+.card-reference .knowledge-copy .knowledge-review { color:#715c36; border-color:#a88b50; }
+.card-reference a { color:#255e61; font-size:12px; }
+.fact-sources { display:grid; gap:8px; padding:4px 22px 16px; border-bottom:1px dashed #bba882; }
+.fact-sources small { color:#77664b; font-size:11px; }
+.fact-sources a { padding:6px 0; line-height:1.7; overflow-wrap:anywhere; text-underline-offset:3px; }
+.collection-card.locked { border:1px dashed #6d928e; background:#23434a; box-shadow:none; }
+.collection-card.locked .flight-card-art img { opacity:.25; filter:grayscale(1); }
+.collection-card.locked .flight-card-art:after { content:'?'; position:absolute; inset:0; display:grid; place-items:center; color:#d7e3d7; font:italic 48px Georgia,serif; }
+.collection-card.locked .flight-card-copy { border-color:#6d928e; }
+.collection-card.locked h3 { color:#c7d9d1; }
+.collection-card.locked p,.collection-card.locked .flight-card-kicker { color:#b5cbc4; }
+.collection-card.locked .flight-card-stamp { border-color:#6d928e; color:#b5cbc4; transform:none; }
+.card-rewards { border-top:1px solid #edcc9166; padding-top:15px; margin-top:15px; }
+.card-rewards h3 { margin:7px 0 13px; font-size:17px; color:var(--gold); }
+.reward-cards { display:grid; gap:9px; }
+.reward-card { display:flex; align-items:center; gap:12px; text-align:left; width:100%; padding:0; min-height:64px; overflow:hidden; border:1px solid #d4bd8c88; border-radius:8px; background:#f1e8d2; color:#1c444a; }
+.reward-card img { width:98px; height:65px; object-fit:cover; flex:none; }
+.reward-card span { min-width:0; padding:7px 10px 7px 0; }
+.reward-card small { display:block; font:600 9px ui-monospace,monospace; letter-spacing:.12em; color:#76613c; margin-bottom:6px; }
+.reward-card b { display:block; font-size:13px; line-height:1.5; }
+.reward-card:hover { background:#fff4da; border-color:var(--gold); }
+.card-reward-hint { font-size:12px; color:#c3d7ce; line-height:1.7; }
+@media(max-width:650px) {
+ .collection-grid { grid-template-columns:minmax(0,1fr); gap:14px; }
+ .flight-card-copy { padding:17px 18px; }
+ .flight-card-copy h3 { font-size:22px; }
+ .flight-card-copy p { font-size:14px; }
+ .card-reference>summary { padding:13px 18px; }
+ .card-reference .knowledge-copy,.fact-sources { padding-left:18px; padding-right:18px; }
+}
+@media(prefers-reduced-motion:no-preference) {
+ .just-earned .flight-card-stamp { animation:card-stamp .35s ease-out; }
+ @keyframes card-stamp { from { opacity:0; transform:scale(1.15) rotate(-8deg); } to { opacity:1; transform:scale(1) rotate(-3deg); } }
+}
