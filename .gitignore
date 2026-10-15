@@ -1,0 +1,14 @@
+node_modules/
+dist/
+artifacts/
+.openai/
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+*.pem
+*.key
+*.tar.gz
+*.zip

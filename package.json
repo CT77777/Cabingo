@@ -1,0 +1,16 @@
+{
+  "name": "cabingo",
+  "version": "0.2.1",
+  "private": true,
+  "description": "Cabin, Please. standalone 3D preflight browser game",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "python3 -m http.server 4173 --bind 127.0.0.1 -d public",
+    "build": "node build.cjs",
+    "test": "node tests/preflight-3d.test.mjs && node tests/preflight-3d-input.test.cjs && node tests/preflight-3d-scene.test.mjs",
+    "test:layout": "python3 tests/preflight-3d-layout.test.py",
+    "test:all": "npm test && npm run test:layout"
+  }
+}

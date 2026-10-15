@@ -1,0 +1,13 @@
+Cabin, Please. 3D prototype
+
+Three.js version 0.180.0, fetched from the official npm package:
+https://registry.npmjs.org/three/-/three-0.180.0.tgz
+Upstream: https://github.com/mrdoob/three.js
+License: MIT. The unmodified license is in vendor/THREE-LICENSE.txt.
+Locally vendored files: three.module.min.js and three.core.min.js.
+No CDN, external models, voice assets, textures, or runtime requests are used.
+
+The small walking/proximity-task format was inspired by discussion of
+https://github.com/andyhuo520/grandma-gta . No source code, models, sounds,
+characters, or other assets were copied from that repository.
+All cabin geometry, characters, scenario logic and UI are original for this prototype.

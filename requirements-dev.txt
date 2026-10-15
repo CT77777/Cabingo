@@ -1,0 +1,2 @@
+# Only needed for the static DOM/CSS layout suite.
+lxml==6.1.1

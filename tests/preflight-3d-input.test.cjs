@@ -1,0 +1,191 @@
+'use strict';
+// Production controller code runs unchanged after removing its ESM import and
+// final asynchronous scene boot. DOM, storage and the Three view are test doubles.
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),crypto=require('node:crypto');
+const {pathToFileURL}=require('node:url');
+const root=path.resolve(__dirname,'..'),mainSource=fs.readFileSync(path.join(root,'public/main.js'),'utf8'),html=fs.readFileSync(path.join(root,'public/index.html'),'utf8');
+const results=[],traces={},copy=x=>JSON.parse(JSON.stringify(x));
+const near=(a,b,message='')=>assert(Math.abs(a-b)<1e-7,`${message}: ${a} versus ${b}`);
+function harness(logic,{seed=1701,reducedMotion=false,phone=false,storage={}}={}) {
+  const ids={},windowEvents={},documentEvents={},raf=[],calls={render:0,dispose:0,reload:0,errors:[]};let document;
+  class Element {
+    constructor(tag='div',id){this.tagName=tag.toUpperCase();this.id=id;this.children=[];this.parentNode=null;this.dataset={};this.style={};this.attrs={};this.events={};this.hidden=false;this.disabled=false;this.textContent='';this.className='';this.captures=[];this.open=false;this.classList={toggle:(name,on)=>{const c=new Set(this.className.split(/\s+/).filter(Boolean));if(on)c.add(name);else c.delete(name);this.className=[...c].join(' ');},contains:name=>this.className.split(/\s+/).includes(name)};}
+    addEventListener(name,fn){(this.events[name]??=[]).push(fn);}
+    dispatch(name,event={}){const e={type:name,target:this,detail:0,prevented:0,preventDefault(){this.prevented++;},...event};for(const fn of this.events[name]||[])fn(e);return e;}
+    click(event={}){if(!this.disabled)return this.dispatch('click',event);}
+    append(...children){for(const c of children){c.parentNode=this;this.children.push(c);}}
+    replaceChildren(...children){for(const c of this.children)c.parentNode=null;this.children=[];this.append(...children);}
+    querySelector(selector){for(const c of this.children){if(selector==='button'&&c.tagName==='BUTTON')return c;const found=c.querySelector(selector);if(found)return found;}return null;}
+    focus(){document.activeElement=this;}
+    scrollIntoView(){this.scrolled=true;}
+    setAttribute(name,value){this.attrs[name]=String(value);}
+    setPointerCapture(id){this.captures.push(id);}
+  }
+  for(const m of html.matchAll(/<([\w-]+)\b[^>]*\bid="([^"]+)"[^>]*>/g)){const e=ids[m[2]]=new Element(m[1],m[2]);e.hidden=/\bhidden(?:\s|>|=)/.test(m[0]);e.disabled=/\bdisabled(?:\s|>|=)/.test(m[0]);e.open=/\bopen(?:\s|>|=)/.test(m[0]);}
+  ids.decisionCard.append(ids.choices,ids.closeDecision);ids.lessonCard.append(ids.lessonContinue);ids.pauseCard.append(ids.resumeButton,ids.restartButton,ids.modeButton);ids.resultCard.append(ids.replayButton,ids.resultMenuButton);ids.briefCard.append(ids.startButton,ids.practiceButton);
+  const buttons=['up','left','down','right'].map(dir=>{const b=new Element('button');b.dataset.dir=dir;return b;});
+  document={body:new Element('body'),hidden:false,activeElement:ids.sceneCanvas,getElementById:id=>{assert(ids[id],`unknown DOM ID ${id}`);return ids[id];},createElement:tag=>new Element(tag),querySelectorAll:selector=>{assert.equal(selector,'[data-dir]');return buttons;},addEventListener:(name,fn)=>(documentEvents[name]??=[]).push(fn)};
+  const motion={matches:reducedMotion,listener:null,addEventListener(name,fn){this.listener=fn;}},phoneMedia={matches:phone,listener:null,addEventListener(name,fn){this.listener=fn;}};
+  const window={addEventListener:(name,fn)=>(windowEvents[name]??=[]).push(fn)};
+  const fakeView={labels:[],render(){calls.render++;return {labels:this.labels};},dispose(){calls.dispose++;}};
+  const testMath=Object.create(Math);testMath.random=()=>seed/1e9;
+  const context=vm.createContext({document,window,matchMedia:q=>q.includes('max-width')?phoneMedia:motion,location:{reload(){calls.reload++;}},localStorage:{getItem:key=>storage[key]??null,setItem:(key,value)=>{storage[key]=String(value);}},requestAnimationFrame:fn=>{raf.push(fn);return raf.length;},console:{...console,error:(...args)=>calls.errors.push(args.map(String))},Math:testMath,Set,Map,String,Number,Error,...logic,__fakeView:fakeView});
+  let source=mainSource.replace(/^import\s+\{[^\n]+\}\s+from\s+'\.\/preflight\.mjs(?:\?v=[^']+)?';\s*\n/,'');
+  assert.notEqual(source,mainSource,'expected production preflight import');
+  assert(/refresh\(true\);boot\(\);\s*$/.test(source),'expected final boot call');
+  source=source.replace(/refresh\(true\);boot\(\);\s*$/,'refresh(true);');
+  source+='\nready=true;view=__fakeView;hide("loading",true);$("startButton").disabled=false;$("practiceButton").disabled=false;refresh(true);window.__test={getState:()=>state,frame,keys,touch,held,fail,refresh,updateLabels,screenInputToWorld};';
+  vm.runInContext(source,context,{filename:'public/main.js (unaltered production controller body)'});
+  const api=window.__test;let time=0;
+  function dispatch(name,event={}){const e={type:name,key:'',code:'',repeat:false,target:document.activeElement,metaKey:false,ctrlKey:false,altKey:false,prevented:0,preventDefault(){this.prevented++;},...event};for(const fn of windowEvents[name]||[])fn(e);return e;}
+  function step(n=1){for(let i=0;i<n;i++){time+=1000/60;api.frame(time);}return api.getState();}
+  const key=(code,key=code,extra={})=>dispatch('keydown',{code,key,...extra}),up=(code,key=code)=>dispatch('keyup',{code,key});
+  function tap(code,keyValue=code,extra={}){const e=key(code,keyValue,extra);up(code,keyValue);return e;}
+  function begin(practice=false){ids[practice?'practiceButton':'startButton'].click({detail:1});assert.equal(api.getState().status,'playing');}
+  function approach(practice=false){begin(practice);key('ArrowUp');for(let i=0;i<100&&api.getState().near!=='belt';i++)step();up('ArrowUp');assert.equal(api.getState().near,'belt');}
+  function open(practice=false){approach(practice);tap('KeyE','Process',{isComposing:true});assert.equal(api.getState().dialog.id,'belt');}
+  function choice(predicate,{release=true,codePrefix='Digit'}={}){const index=typeof predicate==='number'?predicate:api.getState().dialog.choices.findIndex(predicate);assert(index>=0);const code=`${codePrefix}${index+1}`;key(code,'Process',{isComposing:true});if(release)up(code,'Process');return code;}
+  function dismiss(){ids.lessonContinue.click({detail:1});assert.equal(api.getState().lesson,null);}
+  return {ids,buttons,api,document,motion,phoneMedia,calls,raf,storage,fakeView,Element,dispatch,key,up,tap,step,begin,approach,open,choice,dismiss,state:()=>api.getState(),button:dir=>buttons.find(b=>b.dataset.dir===dir),visibility(hidden){document.hidden=hidden;for(const fn of documentEvents.visibilitychange||[])fn();}};
+}
+(async()=>{
+  const logic=await import(pathToFileURL(path.join(root,'public/preflight.mjs')));
+  const test=(name,fn)=>{try{fn();results.push({name,passed:true});console.log('PASS',name);}catch(error){results.push({name,passed:false,error:error.message,stack:error.stack});console.error('FAIL',name,'\n ',error.message);}};
+  test('Start buttons launch the requested mode and focus canvas exactly once',()=>{
+    for(const practice of [false,true]){const h=harness(logic);assert.equal(h.state().status,'briefing');h.step(10);assert.equal(h.state().elapsed,0);h.begin(practice);assert.equal(h.state().practice,practice);assert.equal(h.document.activeElement,h.ids.sceneCanvas);assert.equal(h.ids.briefCard.hidden,true);const before=copy(h.state());h.ids.startButton.click();h.ids.practiceButton.click();assert.deepEqual(copy(h.state()),before);}
+  });
+  test('Physical WASD under IME and arrows map screen right to world -x and up to +z in both cameras',()=>{
+    for(const camera of ['follow','overview'])for(const [arrow,physical,axis,sign] of [['ArrowUp','KeyW','z',1],['ArrowDown','KeyS','z',-1],['ArrowLeft','KeyA','x',1],['ArrowRight','KeyD','x',-1]]){
+      const a=harness(logic),b=harness(logic);a.begin();b.begin();if(camera==='overview'){a.tap('KeyC');b.tap('KeyC');}const before=a.state().player[axis];assert.equal(a.key(arrow).prevented,1);assert.equal(b.key(physical,'Process',{isComposing:true}).prevented,1);a.step(6);b.step(6);near(a.state().player[axis],b.state().player[axis]);assert((b.state().player[axis]-before)*sign>0,`${camera} ${physical}`);a.up(arrow);b.up(physical);const stopped=copy(b.state().player);b.step(10);near(b.state().player.x,stopped.x);near(b.state().player.z,stopped.z);
+    }
+  });
+  test('Touch directions use the same screen-relative mapping as keyboard in both cameras',()=>{
+    for(const camera of ['follow','overview'])for(const [dir,code] of [['up','ArrowUp'],['down','ArrowDown'],['left','ArrowLeft'],['right','ArrowRight']]){const a=harness(logic),b=harness(logic);a.begin();b.begin();if(camera==='overview'){a.tap('KeyC');b.tap('KeyC');}a.key(code);const event=b.button(dir).dispatch('pointerdown',{pointerId:7});assert.equal(event.prevented,1);a.step(6);b.step(6);near(a.state().player.x,b.state().player.x);near(a.state().player.z,b.state().player.z);assert.deepEqual(b.button(dir).captures,[7]);}
+  });
+  test('Physical E and digits work with IME Process without a select-through',()=>{const h=harness(logic);h.approach();assert.equal(h.key('KeyE','Process',{isComposing:true}).prevented,1);assert.equal(h.state().dialog.id,'belt');assert.equal(h.state().action,null);assert.equal(h.document.activeElement,h.ids.choices.children[0]);h.key('KeyE','Process',{repeat:true,isComposing:true});assert.equal(h.state().action,null);h.up('KeyE');h.choice(c=>c.good);assert.equal(h.state().action.kind,'task');assert.equal(h.state().mistakes,0);assert.equal(h.state().dialog,null);traces.ime=copy(h.state());});
+  test('Numpad choice digits and missing/Unidentified code fallback are supported',()=>{for(const prefix of ['Digit','Numpad']){const h=harness(logic);h.open();h.choice(c=>c.good,{codePrefix:prefix});assert.equal(h.state().action.kind,'task');}for(const event of [{code:'',key:'w'},{code:'Unidentified',key:'W'},{code:'',key:'ArrowUp'}]){const h=harness(logic);h.begin();h.dispatch('keydown',event);h.step(5);assert(h.state().player.z>1.5);h.dispatch('keyup',event);const z=h.state().player.z;h.step();near(h.state().player.z,z);}});
+  test('Auto-repeat moves but does not open, select, dismiss, pause or toggle camera',()=>{const h=harness(logic);h.begin();h.key('KeyW','Process',{repeat:true});h.step(12);h.up('KeyW');assert.equal(h.state().near,'belt');h.key('KeyE','Process',{repeat:true});assert.equal(h.state().dialog,null);h.tap('KeyE');h.key('Digit1','Process',{repeat:true});assert.equal(h.state().action,null);h.key('Escape','Escape',{repeat:true});assert.equal(h.state().status,'playing');h.key('KeyC','c',{repeat:true});assert.equal(h.state().cameraMode,'follow');});
+  test('Modifier shortcuts and editable fields never become gameplay input',()=>{for(const props of [{ctrlKey:true},{metaKey:true},{altKey:true},{target:{tagName:'INPUT'}},{target:{tagName:'TEXTAREA'}},{target:{tagName:'SELECT'}},{target:{tagName:'DIV',isContentEditable:true}}]){const h=harness(logic);h.begin();assert.equal(h.key('ArrowUp','ArrowUp',props).prevented,0);h.key('KeyC','c',props);h.step(5);near(h.state().player.z,1.5);assert.equal(h.state().cameraMode,'follow');}});
+  test('Opposite controls cancel; touch and keyboard release independently',()=>{const h=harness(logic);h.begin();h.key('KeyW');h.key('KeyS');h.step(5);near(h.state().player.z,1.5);h.up('KeyS');h.button('up').dispatch('pointerdown',{pointerId:8});h.up('KeyW');h.step(5);assert(h.state().player.z>1.5);h.button('up').dispatch('pointerup',{pointerId:8});const z=h.state().player.z;h.step(5);near(h.state().player.z,z);});
+  test('Pointer up, cancel and lost capture release touch movement',()=>{for(const end of ['pointerup','pointercancel','lostpointercapture']){const h=harness(logic);h.begin();h.button('right').dispatch('pointerdown',{pointerId:3});h.step(5);assert(h.state().player.x<0);h.button('right').dispatch(end,{pointerId:3});const p=copy(h.state().player);h.step(5);near(h.state().player.x,p.x);assert.equal(h.api.touch.size,0);}});
+  test('Open decisions freeze timers and reject movement; Close returns focus to canvas',()=>{const h=harness(logic);h.open();h.step();const before=copy(h.state());h.key('ArrowUp');h.button('up').dispatch('pointerdown',{pointerId:4});h.step(100);assert.deepEqual(copy(h.state()),before);assert.equal(h.api.keys.size,0);assert.equal(h.api.touch.size,0);h.ids.closeDecision.click({detail:1});assert.equal(h.state().dialog,null);assert.equal(h.document.activeElement,h.ids.sceneCanvas);const z=h.state().player.z;h.step(5);near(h.state().player.z,z);});
+  test('First correction tip and correction action freeze together until deliberate continuation',()=>{const h=harness(logic);h.open();const code=h.choice(c=>!c.good,{release:false});assert.equal(h.state().lesson.id,'correction');assert.equal(h.state().action.kind,'correction');assert.equal(h.ids.decisionCard.hidden,true);assert.equal(h.ids.lessonCard.hidden,false);assert.equal(h.document.activeElement,h.ids.lessonContinue);h.step();const before=copy(h.state());h.key(code,'Process',{repeat:true});h.ids.lessonContinue.dispatch('click',{detail:0});h.step(100);assert.deepEqual(copy(h.state()),before);h.up(code);h.dismiss();h.step();assert(h.state().action.time>0);traces.firstTip=copy(h.state());});
+  test('A Space press inherited from the previous panel cannot dismiss the first tip on key-up',()=>{const h=harness(logic);h.open();h.key('Space',' ');const code=h.choice(c=>!c.good,{release:false});h.up(code);assert.equal(h.state().lesson.id,'correction');h.up('Space',' ');h.ids.lessonContinue.dispatch('click',{detail:0});assert.equal(h.state().lesson?.id,'correction','synthetic native Space key-up click must not dismiss a newly focused tip');});
+  test('Repeated native Enter click cannot dismiss first tip; a fresh Enter can',()=>{const h=harness(logic);h.open();const index=h.state().dialog.choices.findIndex(c=>!c.good);h.ids.choices.children[index].focus();h.key('Enter','Enter');h.ids.choices.children[index].click({detail:0});assert.equal(h.state().lesson.id,'correction');h.key('Enter','Enter',{repeat:true});h.ids.lessonContinue.dispatch('click',{detail:0});assert.equal(h.state().lesson.id,'correction');h.up('Enter','Enter');h.key('Enter','Enter');h.ids.lessonContinue.dispatch('click',{detail:0});assert.equal(h.state().lesson,null);h.up('Enter','Enter');});
+  test('Fresh Space, Enter and NumpadEnter work after suppressing inherited tip activation',()=>{
+    for(const code of ['Space','Enter','NumpadEnter']){const h=harness(logic);h.open();h.key(code,code==='Space'?' ':code);const digit=h.choice(c=>!c.good,{release:false});h.up(digit);h.up(code);h.ids.lessonContinue.dispatch('click',{detail:0});assert.equal(h.state().lesson?.id,'correction');h.key(code,code==='Space'?' ':code);if(code==='Space')h.up(code,' ');h.ids.lessonContinue.dispatch('click',{detail:0});assert.equal(h.state().lesson,null,`${code} fresh activation`);if(code!=='Space')h.up(code);}
+  });
+  test('Assistive-technology click without held keys and deliberate pointer click can acknowledge tips',()=>{
+    const h=harness(logic);h.open();const index=h.state().dialog.choices.findIndex(c=>!c.good);h.ids.choices.children[index].dispatch('click',{detail:0});assert.equal(h.state().lesson?.id,'correction');h.ids.lessonContinue.dispatch('click',{detail:0});assert.equal(h.state().lesson,null);
+    const pointer=harness(logic);pointer.open();pointer.key('Space',' ');pointer.choice(c=>!c.good,{release:false});pointer.ids.lessonContinue.dispatch('click',{detail:1});assert.equal(pointer.state().lesson,null);
+  });
+  test('Formal correction shows its reason through demand updates and completes after exactly 2 active seconds',()=>{
+    const h=harness(logic);h.open();h.ids.closeDecision.click({detail:1});h.step(260);h.tap('KeyE');
+    const wrong=h.state().dialog.choices.find(c=>!c.good);h.choice(c=>!c.good);
+    assert.equal(h.state().action.duration,2);assert(h.ids.lessonCopy.textContent.includes(wrong.feedback));
+    assert.equal(h.ids.feedback.textContent,wrong.feedback);h.step(100);near(h.state().action.time,0);
+    h.dismiss();const at=h.state().elapsed;h.step(35);assert.equal(h.state().tasks.find(t=>t.id==='blanket').active,true);
+    assert.equal(h.ids.feedback.textContent,wrong.feedback,'new passenger notices cannot hide the correction reason');
+    h.step(84);assert(h.state().action);h.tap('KeyE');assert.equal(h.state().dialog,null);h.step();
+    assert.equal(h.state().action,null);near(h.state().elapsed,at+2);assert.equal(h.state().safetyErrors,1);assert.equal(h.state().safety,80);
+    h.tap('KeyE');assert.equal(h.state().dialog.id,'belt');
+  });
+  test('Formal 2-second correction pauses and blurs without granting early retry or losing remaining time',()=>{
+    for(const stop of [h=>h.tap('Escape'),h=>h.dispatch('blur'),h=>h.visibility(true)]){
+      const h=harness(logic);h.open();h.choice(c=>!c.good);h.dismiss();h.step(45);near(h.state().action.time,.75);
+      stop(h);assert.equal(h.state().status,'paused');h.step();const frozen=copy(h.state());h.step(200);h.tap('Digit1');assert.deepEqual(copy(h.state()),frozen);
+      h.visibility(false);h.dispatch('focus');assert.equal(h.state().status,'paused');h.ids.resumeButton.click({detail:1});
+      h.step(74);assert(h.state().action);h.tap('KeyE');assert.equal(h.state().dialog,null);h.step();assert.equal(h.state().action,null);
+      assert.equal(h.state().safetyErrors,1);assert.equal(h.state().safety,80);h.tap('KeyE');assert.equal(h.state().dialog.id,'belt');
+    }
+  });
+  test('Practice wrong choice keeps buttons, specific feedback, focus and score ready for immediate correction',()=>{
+    const h=harness(logic);h.open(true);const before=copy(h.state()),buttons=[...h.ids.choices.children],dialog=h.state().dialog;
+    const wrong=dialog.choices.find(c=>!c.good);h.choice(c=>!c.good);
+    assert.equal(h.state().dialog,dialog);assert.deepEqual(h.ids.choices.children,buttons);
+    assert.equal(h.state().action,null);assert.equal(h.state().lesson,null);assert.equal(h.ids.lessonCard.hidden,true);assert.equal(h.ids.actionBox.hidden,true);
+    assert.equal(h.ids.decisionCard.hidden,false);assert(h.ids.decisionDescription.textContent.includes(wrong.feedback));
+    assert.equal(h.ids.decisionDescription.textContent,h.state().dialog.recoveryFeedback);assert.equal(h.ids.decisionDescription.dataset.kind,'warning');
+    assert.equal(h.document.activeElement,buttons[0]);assert.equal(h.state().elapsed,before.elapsed);
+    assert.equal(h.state().mistakes,0);assert.equal(h.state().safetyErrors,0);assert.equal(h.state().safety,100);assert.equal(h.state().servicePenalty,0);
+    h.step();const frozen=copy(h.state());h.step(200);assert.deepEqual(copy(h.state()),frozen);
+    h.choice(c=>c.good);assert.equal(h.state().dialog,null);assert.equal(h.state().action.kind,'task');assert.equal(h.ids.decisionCard.hidden,true);
+    assert.equal(h.document.activeElement,h.ids.sceneCanvas);let guard=0;while(h.state().action&&guard++<500)h.step();
+    assert(guard<500);assert.equal(h.state().tasks.find(t=>t.id==='belt').done,true);assert.equal(h.state().mistakes,0);
+    traces.practiceImmediate={feedback:wrong.feedback,completed:h.state().completed,elapsed:h.state().elapsed};
+  });
+  test('Practice held digits and duplicate non-repeat events cannot select again until a fresh press',()=>{
+    for(const codePrefix of ['Digit','Numpad']){
+      const h=harness(logic);h.open(true);const code=h.choice(c=>!c.good,{release:false,codePrefix});
+      const serial=h.state().dialog.retrySerial,order=h.state().dialog.choices.map(c=>c.id),before=copy(h.state());
+      h.key(code,'Process',{repeat:true,isComposing:true});h.key(code,'Process',{repeat:false,isComposing:true});
+      assert.deepEqual(copy(h.state()),before);assert.equal(h.state().dialog.retrySerial,serial);
+      h.up(code);h.choice(c=>!c.good,{codePrefix});assert.equal(h.state().dialog.retrySerial,serial+1);
+      assert.deepEqual(h.state().dialog.choices.map(c=>c.id),order);assert.equal(h.state().action,null);assert.equal(h.state().lesson,null);
+      h.choice(c=>c.good,{codePrefix});assert.equal(h.state().action.kind,'task');
+    }
+  });
+  test('Practice native Enter and NumpadEnter repeats cannot activate the reopened choice; fresh presses can',()=>{
+    for(const code of ['Enter','NumpadEnter']){
+      const h=harness(logic);h.open(true);const wrong=h.state().dialog.choices.findIndex(c=>!c.good),good=h.state().dialog.choices.findIndex(c=>c.good);
+      h.ids.choices.children[wrong].focus();h.key(code);h.ids.choices.children[wrong].click({detail:0});
+      const before=copy(h.state());h.key(code,code,{repeat:true});h.ids.choices.children[good].click({detail:0});
+      h.key(code,code,{repeat:false});h.ids.choices.children[wrong].click({detail:0});assert.deepEqual(copy(h.state()),before);
+      h.up(code);h.ids.choices.children[good].click({detail:0});assert.deepEqual(copy(h.state()),before,'inherited native click stays suppressed after release');
+      h.key(code);h.ids.choices.children[good].click({detail:0});assert.equal(h.state().action.kind,'task');h.up(code);
+    }
+  });
+  test('Practice inherited Space key-up cannot select again, while a fresh Space completes its chosen action',()=>{
+    const h=harness(logic);h.open(true);const good=h.state().dialog.choices.findIndex(c=>c.good);
+    h.ids.choices.children[good].focus();h.key('Space',' ');const digit=h.choice(c=>!c.good,{release:false});
+    const before=copy(h.state());h.key('Space',' ',{repeat:true});h.ids.choices.children[good].click({detail:0});assert.deepEqual(copy(h.state()),before);
+    h.up(digit);h.up('Space',' ');h.ids.choices.children[good].click({detail:0});assert.deepEqual(copy(h.state()),before);
+    h.key('Space',' ');h.up('Space',' ');h.ids.choices.children[good].click({detail:0});assert.equal(h.state().action.kind,'task');
+  });
+  test('Practice direct Space choice permits a deliberate fresh retry without a forced lesson',()=>{
+    const h=harness(logic);h.open(true);const wrong=h.state().dialog.choices.findIndex(c=>!c.good),good=h.state().dialog.choices.findIndex(c=>c.good);
+    h.ids.choices.children[wrong].focus();h.key('Space',' ');h.up('Space',' ');h.ids.choices.children[wrong].click({detail:0});
+    assert.equal(h.state().action,null);assert.equal(h.state().lesson,null);assert(h.state().dialog.recoveryFeedback);
+    h.ids.choices.children[good].focus();h.key('Space',' ');h.up('Space',' ');h.ids.choices.children[good].click({detail:0});assert.equal(h.state().action.kind,'task');
+  });
+  test('Practice deliberate pointer and assistive clicks can retry, including while an old key is held',()=>{
+    for(const detail of [0,1]){
+      const h=harness(logic);h.open(true);const wrong=h.state().dialog.choices.findIndex(c=>!c.good),good=h.state().dialog.choices.findIndex(c=>c.good);
+      if(detail)h.key('Enter');h.ids.choices.children[wrong].click({detail});assert.equal(h.state().action,null);
+      h.ids.choices.children[wrong].click({detail});assert.equal(h.state().dialog.retrySerial,2);assert.equal(h.state().safetyErrors,0);
+      h.ids.choices.children[good].click({detail});assert.equal(h.state().action.kind,'task');
+    }
+  });
+  test('Practice retry feedback survives pause and blur; switching to formal resets feedback and first-tip eligibility',()=>{
+    const storage={},h=harness(logic,{storage});h.open(true);h.choice(c=>!c.good);const dialog=copy(h.state().dialog);
+    for(const stop of [()=>h.tap('Escape'),()=>h.dispatch('blur')]){
+      stop();h.step();const before=copy(h.state());h.step(100);assert.deepEqual(copy(h.state()),before);
+      h.ids.resumeButton.click({detail:1});assert.deepEqual(copy(h.state().dialog),dialog);assert.equal(h.ids.decisionDescription.textContent,dialog.recoveryFeedback);
+      assert.equal(h.ids.decisionCard.hidden,false);assert.equal(h.state().action,null);
+    }
+    assert(!h.state().lessonSeen.includes('correction'));assert.equal(storage['cabin3d-lessons-v2'],undefined);
+    h.tap('Escape');h.ids.modeButton.click({detail:1});h.open();assert.equal(h.state().practice,false);
+    assert.equal(h.state().dialog.recoveryFeedback,undefined);assert.equal(h.ids.decisionDescription.dataset.kind,'normal');
+    h.choice(c=>!c.good);assert.equal(h.state().action.duration,2);assert.equal(h.state().lesson.id,'correction');assert.equal(h.state().safetyErrors,1);
+  });
+  test('First tip is shown once, saved after acknowledgement and preserved over round resets',()=>{const storage={},h=harness(logic,{storage});h.open();h.choice(c=>!c.good);h.dismiss();assert.deepEqual(JSON.parse(storage['cabin3d-lessons-v2']),['correction']);h.step(130);assert.equal(h.state().action,null);h.tap('KeyE');h.choice(c=>!c.good);assert.equal(h.state().lesson,null);h.tap('Escape');h.ids.restartButton.click({detail:1});assert(h.state().lessonSeen.includes('correction'));const second=harness(logic,{storage});second.open();second.choice(c=>!c.good);assert.equal(second.state().lesson,null);});
+  test('Malformed storage is ignored safely and unknown remembered tips are filtered',()=>{for(const value of ['not-json','{}','null']){const h=harness(logic,{storage:{'cabin3d-lessons-v2':value}});assert.deepEqual(copy(h.state().lessonSeen),[]);}const h=harness(logic,{storage:{'cabin3d-lessons-v2':'["correction","invalid"]'}});assert.deepEqual(copy(h.state().lessonSeen),['correction']);});
+  test('Pause preserves decision content, order, reading freeze and restores button focus',()=>{const h=harness(logic);h.open();const d=copy(h.state().dialog);h.tap('Escape');assert.equal(h.state().status,'paused');assert.equal(h.document.activeElement,h.ids.resumeButton);assert.equal(h.ids.decisionCard.hidden,true);h.step();const before=copy(h.state());h.tap('Digit1');h.step(100);assert.deepEqual(copy(h.state()),before);h.ids.resumeButton.click({detail:1});assert.deepEqual(copy(h.state().dialog),d);assert.equal(h.document.activeElement,h.ids.choices.children[0]);});
+  test('Blur freezes a first tip and its action; focus never resumes automatically',()=>{const h=harness(logic);h.open();h.choice(c=>!c.good);h.dispatch('blur');assert.equal(h.state().status,'paused');h.step();const before=copy(h.state());h.step(100);h.dispatch('focus');assert.deepEqual(copy(h.state()),before);assert.equal(h.api.keys.size,0);assert.equal(h.api.touch.size,0);h.ids.resumeButton.click({detail:1});assert.equal(h.state().lesson.id,'correction');assert.equal(h.document.activeElement,h.ids.lessonContinue);h.step(100);near(h.state().action.time,0);});
+  test('Blur and document-hidden pause active timers and require explicit resume',()=>{for(const hide of [h=>h.dispatch('blur'),h=>h.visibility(true)]){const h=harness(logic);h.open();h.choice(c=>c.good);h.step(20);hide(h);assert.equal(h.state().status,'paused');h.step();const before=copy(h.state());h.visibility(false);h.dispatch('focus');h.step(200);assert.deepEqual(copy(h.state()),before);h.ids.resumeButton.click({detail:1});h.step();assert(h.state().action.time>before.action.time);}});
+  test('Movement pressed during action cannot leak into movement after completion',()=>{const h=harness(logic);h.open();h.choice(c=>c.good);const p=copy(h.state().player);h.key('ArrowUp');h.button('up').dispatch('pointerdown',{pointerId:9});h.step(250);assert.equal(h.state().action,null);assert.equal(h.state().tasks.find(t=>t.id==='belt').done,true);assert.equal(h.api.keys.size,0);assert.equal(h.api.touch.size,0);near(h.state().player.x,p.x);near(h.state().player.z,p.z);assert.equal(h.document.activeElement,h.ids.sceneCanvas);});
+  test('Practice restart preserves mode, camera and accessibility while clearing round penalties and progress',()=>{const h=harness(logic,{reducedMotion:true});h.begin(true);h.key('ArrowUp');h.step(12);h.up('ArrowUp');h.tap('KeyE');h.choice(c=>!c.good);assert.equal(h.state().safetyErrors,0);assert.equal(h.state().safety,100);assert.equal(h.state().action,null);assert.equal(h.state().lesson,null);h.ids.closeDecision.click({detail:1});h.step(20);h.tap('KeyC');h.tap('Escape');const previous=h.state();h.ids.restartButton.click({detail:1});assert.notEqual(h.state(),previous);assert.equal(h.state().practice,true);assert.equal(h.state().cameraMode,'overview');assert.equal(h.state().reducedMotion,true);assert.equal(h.state().elapsed,0);assert.equal(h.state().action,null);assert.equal(h.state().completed,0);assert.equal(h.state().handoffTokens,1);near(h.state().player.z,1.5);assert.equal(h.ids.clock.textContent,'練習');});
+  test('Returning from practice to menu then formal resets mode, state and countdown',()=>{const h=harness(logic);h.begin(true);h.step(20);h.tap('Escape');h.ids.modeButton.click({detail:1});assert.equal(h.state().status,'briefing');assert.equal(h.state().practice,false);assert.equal(h.ids.briefCard.hidden,false);h.begin(false);assert.equal(h.state().elapsed,0);assert.equal(h.ids.clock.textContent,'01:40');assert.equal(h.state().practice,false);});
+  test('A complete chapter is playable through production movement, E, choice and replay handlers',()=>{
+    const h=harness(logic,{seed:1}),route=[];h.begin();
+    function walk(z){let frames=0;while(Math.abs(h.state().player.z-z)>.025&&frames++<1000){assert.equal(h.state().status,'playing');assert.equal(h.state().lesson,null);const code=z>h.state().player.z?'ArrowUp':'ArrowDown';h.key(code);h.step();h.up(code);}assert(frames<1000,`walk reached ${h.state().player.z}, wanted ${z}`);}
+    for(const id of ['belt','question','water','tray','bag','blanket']){const task=h.state().tasks.find(t=>t.id===id);walk(task.z-.85);let guard=0;while(!task.active&&guard++<1000)h.step();assert(task.active);h.tap('KeyE','Process',{isComposing:true});assert.equal(h.state().dialog?.id,id);h.choice(c=>c.good&&!c.handoff&&!c.ack&&c.id!=='ask');guard=0;while(h.state().action&&guard++<1000)h.step();assert(guard<1000);assert.equal(task.done,true);route.push({id,time:h.state().elapsed,x:h.state().player.x,z:h.state().player.z});}
+    walk(1.5);h.tap('KeyE','Process',{isComposing:true});assert.equal(h.state().status,'finished');assert.equal(h.state().grade,'clean');assert.equal(h.state().completed,6);assert.equal(h.ids.resultCard.hidden,false);assert.equal(h.document.activeElement,h.ids.replayButton);assert(h.ids.resultDetails.textContent.includes('檢查 3/3 · 服務 3/3'));assert(h.ids.resultDetails.textContent.includes('回報完成'));h.step();const before=copy(h.state());h.key('ArrowUp');h.step(100);assert.deepEqual(copy(h.state()),before);traces.fullControllerRoute={route,result:copy(h.state())};h.ids.replayButton.click({detail:1});assert.equal(h.state().status,'playing');assert.equal(h.state().completed,0);assert.equal(h.state().elapsed,0);assert.equal(h.state().grade,null);assert.equal(h.document.activeElement,h.ids.sceneCanvas);
+  });
+  test('Mobile task list starts collapsed; desktop expanded; live media changes update safely',()=>{for(const phone of [false,true]){const h=harness(logic,{phone});assert.equal(h.ids.taskDetails.open,!phone);h.phoneMedia.matches=!phone;h.phoneMedia.listener();assert.equal(h.ids.taskDetails.open,phone);h.motion.matches=true;h.motion.listener();assert.equal(h.state().reducedMotion,true);}});
+  test('Scene target labels use returned view coordinates and hide stale labels without intercepting controls',()=>{const h=harness(logic);h.fakeView.labels=[{id:'belt',visible:true,kind:'safety',near:true,text:'1B 安全帶',x:100,y:75}];h.step();const label=h.ids.targetLabels.children[0];assert.equal(label.textContent,'安全 · 1B 安全帶');assert.equal(label.className,'target-label safety near');assert.equal(label.style.left,'100px');assert.equal(label.style.top,'75px');h.fakeView.labels=[];h.step();assert.equal(label.hidden,true);});
+  test('Fatal WebGL failure guards all retained controls, keyboard, touch and frame updates',()=>{const h=harness(logic);h.open();h.choice(c=>c.good);h.step(10);h.api.fail(new Error('WebGL disabled by browser'));assert.equal(h.ids.loading.hidden,true);assert.equal(h.ids.webglError.hidden,false);assert.equal(h.document.body.dataset.panel,'error');for(const id of ['startButton','practiceButton','interactButton','pauseButton','cameraButton'])assert.equal(h.ids[id].disabled,true,id);const before=copy(h.state()),renders=h.calls.render,fallback=h.ids.sceneStatus.textContent;for(const code of ['Escape','KeyE','KeyW','KeyA','KeyS','KeyD','ArrowUp','Digit1','Numpad2','KeyC'])assert.equal(h.key(code,'Process').prevented,0);for(const id of ['startButton','practiceButton','interactButton','closeDecision','lessonContinue','pauseButton','resumeButton','restartButton','replayButton','modeButton','resultMenuButton','cameraButton'])h.ids[id].dispatch('click',{detail:1});h.button('up').dispatch('pointerdown',{pointerId:9});h.step(200);assert.deepEqual(copy(h.state()),before);assert.equal(h.calls.render,renders);assert.equal(h.ids.sceneStatus.textContent,fallback);assert.equal(h.api.keys.size,0);assert.equal(h.api.touch.size,0);assert.equal(h.calls.errors.length,1);h.ids.reloadButton.click();assert.equal(h.calls.reload,1);traces.fatalFallback={status:h.state().status,sceneStatus:fallback,renderCount:renders};});
+  test('View render exceptions enter fatal fallback and stop later renderer calls',()=>{const h=harness(logic);h.begin();h.fakeView.render=()=>{throw new Error('render failed');};h.step();assert.equal(h.ids.webglError.hidden,false);assert.equal(h.state().status,'paused');const before=copy(h.state());h.step(100);assert.deepEqual(copy(h.state()),before);});
+  test('Pagehide disposes once, freezes frames, and BFCache pageshow requests reload',()=>{const h=harness(logic);h.begin();h.key('ArrowUp');h.step(3);h.dispatch('pagehide');h.dispatch('pagehide');assert.equal(h.calls.dispose,1);const before=copy(h.state()),renders=h.calls.render;h.step(100);assert.deepEqual(copy(h.state()),before);assert.equal(h.calls.render,renders);assert.equal(h.api.keys.size,0);h.dispatch('pageshow',{persisted:false});assert.equal(h.calls.reload,0);h.dispatch('pageshow',{persisted:true});assert.equal(h.calls.reload,1);});
+  const result={generatedAt:new Date().toISOString(),suite:'Preflight 3D actual production controller in VM DOM stub',command:'node tests/preflight-3d-input.test.cjs',mainSha256:crypto.createHash('sha256').update(mainSource).digest('hex'),logicSha256:crypto.createHash('sha256').update(fs.readFileSync(path.join(root,'public/preflight.mjs'))).digest('hex'),summary:{total:results.length,passed:results.filter(r=>r.passed).length,failed:results.filter(r=>!r.passed).length},notes:['Production event handler bodies and frame loop run unchanged; only ESM import and final scene boot are replaced.','Real preflight.mjs logic is imported; interaction routes use production listeners and frame inputs, with no task/score/position teleports.','DOM, localStorage, media queries and Three view are stubs. No browser was launched.','Native Enter/Space defaults are modeled as explicit event sequences; browser key event/default-action timing and visual layout still require native verification.'],results,traces};fs.mkdirSync(path.join(root,'artifacts'),{recursive:true});fs.writeFileSync(path.join(root,'artifacts/preflight-3d-input-results.json'),JSON.stringify(result,null,2)+'\n');console.log(`\n${result.summary.passed}/${result.summary.total} preflight input tests passed; ${result.summary.failed} failed.`);if(result.summary.failed)process.exitCode=1;
+})().catch(error=>{console.error(error);process.exitCode=1;});
