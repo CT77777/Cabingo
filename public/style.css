@@ -15,6 +15,7 @@
   --safe-right: max(var(--edge), env(safe-area-inset-right, 0px));
   --safe-bottom: max(var(--edge), env(safe-area-inset-bottom, 0px));
   --safe-left: max(var(--edge), env(safe-area-inset-left, 0px));
+  --mission-bottom:calc(var(--safe-top) + 180px);
   --play-hud-width: min(620px, calc(100% - var(--safe-left) - var(--safe-right) - var(--sidebar-width) - var(--gap)));
 }
 * { box-sizing: border-box; }
@@ -174,7 +175,6 @@ body[data-panel=error] aside, body[data-panel=error] .control-dock, body[data-pa
 }
 @media (max-width: 700px) {
   :root { --edge: 10px; --gap: 8px; --dock-height: 64px; --guidance-height: 112px; --play-hud-width: calc(100% - var(--safe-left) - var(--safe-right)); }
-  body[data-aisle-alert=true][data-panel=idle] aside { top: calc(var(--safe-top) + 168px); }
   body { font-size: 13px; }
   header { height: 36px; gap: 6px; }
   .brand { gap: 6px; padding: 6px 8px; }
@@ -393,7 +393,6 @@ body[data-panel=decision][data-decision-kind=safety] .scene-badge { display:none
 
 /* A short phone viewport keeps the checklist beside the alert. */
 @media (max-width:700px) and (max-height:520px) {
- body[data-aisle-alert=true][data-panel=idle] aside { top:calc(var(--safe-top) + 92px); }
  .aisle-alert { width:calc(100% - 212px - var(--safe-left) - var(--safe-right) - var(--gap)); gap:0; }
  .aisle-alert-icon { display:none; }
  .aisle-alert strong { font-size:12px; }
@@ -710,3 +709,75 @@ button.clue-map[data-revealed=false]:after { content:'▦\a查看座位圖'; }
  .just-earned .flight-card-stamp { animation:card-stamp .35s ease-out; }
  @keyframes card-stamp { from { opacity:0; transform:scale(1.15) rotate(-8deg); } to { opacity:1; transform:scale(1) rotate(-3deg); } }
 }
+
+/* One mission surface above the cabin; the scene keeps the full viewport. */
+.mission-hud { position:absolute; z-index:18; top:calc(var(--safe-top) + 50px); left:var(--safe-left); width:var(--play-hud-width); max-height:calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--dock-height) - 70px); display:flex; flex-direction:column; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; border:1px solid #b4d8cb44; border-radius:10px; background:#102b3aeb; pointer-events:auto; }
+.mission-hud>.flight-strip { position:static; top:auto; left:auto; width:100%; flex:none; border:0; border-radius:0; background:transparent; }
+.mission-hud>.guidance { position:static; bottom:auto; left:auto; width:100%; max-height:none; flex:none; padding:10px 12px; border:0; border-top:1px solid #b4d8cb33; border-radius:0; background:transparent; overflow:visible; }
+.mission-hud .guidance strong { font-size:14px; }
+.mission-hud .guidance p { font-size:13px; }
+.mission-hud>.aisle-alert, .mission-hud>.time-warning { position:static; top:auto; left:auto; transform:none; width:100%; flex:none; border-radius:0; box-shadow:none; }
+.mission-hud>.boarding-coach { position:static; top:auto; bottom:auto; left:auto; width:100%; max-height:none; flex:none; border:0; border-top:1px solid #b4d8cb33; border-radius:0; box-shadow:none; background:transparent; }
+body[data-panel=idle] .scene-badge, body[data-panel=result] .scene-badge { display:none; }
+body[data-panel=result] aside, body[data-panel=result] .control-dock, body[data-panel=result] .guidance, body[data-panel=result] .flight-strip { display:none; }
+@media(max-width:700px) {
+ .mission-hud { top:calc(var(--safe-top) + 46px); }
+ .mission-hud>.flight-strip { min-height:38px; padding:7px 10px; }
+ .mission-hud .guidance strong { font-size:13px; }
+ .mission-hud .guidance p { font-size:12px; }
+ body[data-panel=idle] aside { top:calc(var(--mission-bottom) + 10px); bottom:calc(var(--safe-bottom) + var(--dock-height) + 10px); }
+}
+@media(max-width:700px) and (max-height:520px) { body[data-panel=idle] aside { display:none; } }
+
+/* The chapter conclusion is a destination, with the next flight within reach. */
+.result-overlay { position:fixed; inset:0; z-index:70; display:grid; place-items:center; padding:var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); background:#091e2dcc; backdrop-filter:blur(8px); overflow:hidden; pointer-events:auto; }
+.result-overlay>.result-card { position:relative; width:min(100%,560px); max-height:100%; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; padding:30px 36px 22px; border:1px solid #a8dfcb77; border-radius:20px; background:#173541; box-shadow:0 24px 90px #06192388; text-align:center; }
+.result-emblem { display:grid; place-items:center; width:58px; height:58px; margin:0 auto 16px; border:1px solid #a8dfcb77; border-radius:50%; color:var(--mint); background:#a8dfcb0c; font-size:31px; }
+.result-card[data-outcome=success] { border-color:#edcc9199; }
+.result-card[data-outcome=success] .result-emblem { color:var(--gold); border-color:#edcc9188; }
+.result-card .result-chapter { color:#bbd4cb; font-size:13px; margin:8px 0 4px; }
+.result-overlay .result-card h2 { font-size:30px; line-height:1.35; margin:10px 0; font-weight:700; }
+.result-overlay .result-stars { font-size:34px; letter-spacing:4px; margin:12px 0; }
+.result-overlay #resultCopy { font-size:15px; line-height:1.7; margin:8px auto 22px; max-width:390px; }
+.result-actions { display:grid; gap:10px; margin:0 0 18px; }
+.result-actions>.primary { width:100%; min-height:54px; font-size:17px; }
+.result-actions .button-row>button { min-height:46px; font-size:14px; }
+.result-card .card-rewards { text-align:left; padding-top:12px; }
+.result-card .card-rewards h3 { font-size:14px; margin:4px 0 10px; }
+.result-card .reward-cards { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.result-card .reward-card { min-height:55px; gap:8px; }
+.result-card .reward-card img { width:64px; height:55px; }
+.result-card .reward-card small { font-size:8px; margin-bottom:3px; }
+.result-card .reward-card b { font-size:12px; }
+.result-more { margin-top:12px; border-top:1px solid #b4d8cb33; text-align:left; }
+.result-more>summary { padding:13px 0; min-height:44px; cursor:pointer; color:#c6dcd1; font-size:13px; }
+.result-more .result-advice { margin-top:8px; }
+.result-card>#resultCodexButton { width:100%; justify-content:center; margin-top:4px; min-height:40px; }
+.result-celebration { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+.result-celebration i { position:absolute; top:-20px; left:calc(5% + var(--i)*5%); width:8px; height:15px; background:var(--gold); opacity:0; }
+.result-celebration i:nth-child(3n) { background:var(--mint); width:10px; height:10px; }
+.result-celebration i:nth-child(3n + 1) { background:#f5f0d9; }
+@media(prefers-reduced-motion:no-preference) {
+ .result-card[data-outcome=success] .result-emblem { animation:chapter-arrival .5s ease-out both; }
+ .result-celebration i { animation:chapter-confetti 2.6s ease-out both; animation-delay:calc(var(--i)*.035s); }
+ @keyframes chapter-arrival { from { transform:scale(.7); } to { transform:scale(1); } }
+ @keyframes chapter-confetti { 0% { opacity:0; transform:translate3d(0,0,0) rotate(0); } 10% { opacity:.9; } 80% { opacity:.8; } 100% { opacity:0; transform:translate3d(var(--drift),95dvh,0) rotate(480deg); } }
+}
+@media(prefers-reduced-motion:reduce) { .result-celebration { display:none; } }
+@media(max-width:600px) {
+ .result-overlay>.result-card { padding:22px 20px 16px; border-radius:16px; }
+ .result-overlay .result-card h2 { font-size:25px; }
+ .result-overlay .result-stars { font-size:29px; }
+ .result-card .reward-cards { grid-template-columns:minmax(0,1fr); }
+ .result-emblem { width:48px; height:48px; font-size:27px; margin-bottom:12px; }
+}
+@media(max-height:520px) {
+ .result-overlay>.result-card { padding:18px 24px; }
+ .result-emblem { display:none; }
+ .result-overlay .result-card h2 { font-size:24px; margin:6px 0; }
+ .result-overlay .result-stars { font-size:26px; margin:6px 0; }
+ .result-overlay #resultCopy { margin-bottom:14px; font-size:13px; }
+}
+body[data-panel=brief] .mission-hud, body[data-panel=error] .mission-hud, body[data-panel=lesson] .mission-hud, body[data-panel=pause] .mission-hud, body[data-panel=recovery] .mission-hud, body[data-panel=result] .mission-hud { display:none; }
+
+@media(max-width:700px) and (min-height:521px) { .mission-hud { max-height:calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--dock-height) - 134px); } }

@@ -9,7 +9,7 @@ const near=(a,b,message='')=>assert(Math.abs(a-b)<1e-7,`${message}: ${a} versus 
 function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=false,reducedMotion=false,phone=false,chapterId='preflight',storage={},storageReadError=false,storageWriteError=false}={}) {
   const ids={},windowEvents={},documentEvents={},raf=[],calls={render:0,dispose:0,reload:0,errors:[]};let document;
   class Element {
-    constructor(tag='div',id){this.tagName=tag.toUpperCase();this.id=id;this.children=[];this.parentNode=null;this.dataset={};this.style={};this.attrs={};this.events={};this.hidden=false;this.disabled=false;this.textContent='';this.className='';this.captures=[];this.open=false;this.classList={toggle:(name,on)=>{const c=new Set(this.className.split(/\s+/).filter(Boolean));if(on)c.add(name);else c.delete(name);this.className=[...c].join(' ');},contains:name=>this.className.split(/\s+/).includes(name)};}
+    constructor(tag='div',id){this.tagName=tag.toUpperCase();this.id=id;this.children=[];this.parentNode=null;this.dataset={};this.style={setProperty(name,value){this[name]=value;}};this.attrs={};this.events={};this.hidden=false;this.disabled=false;this.textContent='';this.className='';this.captures=[];this.open=false;this.classList={toggle:(name,on)=>{const c=new Set(this.className.split(/\s+/).filter(Boolean));if(on)c.add(name);else c.delete(name);this.className=[...c].join(' ');},contains:name=>this.className.split(/\s+/).includes(name)};}
     addEventListener(name,fn){(this.events[name]??=[]).push(fn);}
     dispatch(name,event={}){const e={type:name,target:this,detail:0,prevented:0,preventDefault(){this.prevented++;},...event};for(const fn of this.events[name]||[])fn(e);return e;}
     click(event={}){if(!this.disabled)return this.dispatch('click',event);}
@@ -25,7 +25,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     setPointerCapture(id){this.captures.push(id);}
   }
   for(const m of html.matchAll(/<([\w-]+)\b[^>]*\bid="([^"]+)"[^>]*>/g)){const e=ids[m[2]]=new Element(m[1],m[2]);e.hidden=/\bhidden(?:\s|>|=)/.test(m[0]);e.disabled=/\bdisabled(?:\s|>|=)/.test(m[0]);e.open=/\bopen(?:\s|>|=)/.test(m[0]);}
-  ids.decisionCard.append(ids.choices,ids.closeDecision);ids.lessonCard.append(ids.lessonContinue);ids.pauseCard.append(ids.resumeButton,ids.restartButton,ids.modeButton);ids.resultCard.append(ids.nextChapterButton,ids.replayButton,ids.resultMenuButton);ids.briefCard.append(ids.startButton,ids.practiceButton);
+  ids.decisionCard.append(ids.choices,ids.closeDecision);ids.lessonCard.append(ids.lessonContinue);ids.pauseCard.append(ids.resumeButton,ids.restartButton,ids.modeButton);ids.resultCard.append(ids.nextChapterButton,ids.replayButton,ids.resultMenuButton,ids.resultMore,ids.resultCodexButton);ids.resultMore.append(new Element('summary'),ids.reviewDetails);ids.resultOverlay.append(ids.resultCard);ids.briefCard.append(ids.startButton,ids.practiceButton);
   ids.codexOverlay.append(ids.closeCodex,ids.codexContent);
   const buttons=['up','left','down','right'].map(dir=>{const b=new Element('button');b.dataset.dir=dir;return b;});
   document={body:new Element('body'),hidden:false,activeElement:ids.sceneCanvas,getElementById:id=>{assert(ids[id],`unknown DOM ID ${id}`);return ids[id];},createElement:tag=>new Element(tag),querySelectorAll:selector=>{assert.equal(selector,'[data-dir]');return buttons;},addEventListener:(name,fn)=>(documentEvents[name]??=[]).push(fn)};
@@ -58,6 +58,17 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
   const logic={...await import(pathToFileURL(path.join(root,'public/preflight.mjs'))),...await import(pathToFileURL(path.join(root,'public/presentation.mjs'))),...await import(pathToFileURL(path.join(root,'public/results.mjs'))),...await import(pathToFileURL(path.join(root,'public/chapters/index.mjs'))),...await import(pathToFileURL(path.join(root,'public/campaign.mjs'))),...await import(pathToFileURL(path.join(root,'public/interaction.mjs'))),...await import(pathToFileURL(path.join(root,'public/boarding.mjs'))),...await import(pathToFileURL(path.join(root,'public/boarding-ui.mjs'))),...await import(pathToFileURL(path.join(root,'public/learning.mjs'))),...await import(pathToFileURL(path.join(root,'public/knowledge/index.mjs')))};
 
   const test=(name,fn)=>{try{fn();results.push({name,passed:true});console.log('PASS',name);}catch(error){results.push({name,passed:false,error:error.message,stack:error.stack});console.error('FAIL',name,'\n ',error.message);}};
+  test('Phone checklist follows the measured mission bottom when alerts wrap or resize',()=>{const h=harness(logic,{phone:true});h.begin(true);h.ids.missionHud.getBoundingClientRect=()=>({bottom:246,height:180});h.dispatch('resize');assert.equal(h.document.body.style['--mission-bottom'],'246px');h.ids.missionHud.getBoundingClientRect=()=>({bottom:315,height:249});h.dispatch('resize');assert.equal(h.document.body.style['--mission-bottom'],'315px');});
+  test('Finished chapter owns a centered modal, celebrates success and removes gameplay guidance',()=>{
+    const h=harness(logic,{chapterId:'boarding'});h.begin();const s=h.state();s.status='finished';s.endReason='complete';s.grade='clean';s.comfort=100;h.api.refresh(true);
+    assert.equal(h.ids.resultOverlay.hidden,false);assert(h.ids.gameSurface.inert);assert(h.ids.missionHud.hidden);assert(h.ids.guidance.hidden);assert(!h.ids.resultCelebration.hidden);assert.equal(h.ids.resultCard.dataset.outcome,'success');assert(!h.ids.nextChapterButton.hidden);assert.equal(h.document.activeElement,h.ids.nextChapterButton);
+    h.key('Tab','Tab',{shiftKey:true});h.up('Tab');assert.equal(h.document.activeElement,h.ids.resultCodexButton);h.tap('Tab');assert.equal(h.document.activeElement,h.ids.nextChapterButton);
+    h.ids.resultCodexButton.click({detail:1});assert(h.ids.resultOverlay.inert);h.ids.closeCodex.click({detail:1});assert(!h.ids.resultOverlay.inert);assert(h.ids.gameSurface.inert);
+    h.ids.nextChapterButton.click({detail:1});assert(h.ids.resultOverlay.hidden);assert(!h.ids.gameSurface.inert);assert.equal(h.state().chapterId,'preflight');
+  });
+  test('Failure and practice results do not celebrate; result details reset on a new round',()=>{
+    for(const practice of [false,true]){const h=harness(logic);h.begin(practice);const s=h.state();s.status='finished';s.endReason=practice?'complete':'timeout';s.grade=practice?'clean':'incomplete';h.api.refresh(true);assert(h.ids.resultCelebration.hidden);assert(h.ids.nextChapterButton.hidden);assert(h.ids.missionHud.hidden);assert.equal(h.document.activeElement,h.ids.replayButton);h.ids.resultMore.open=true;h.ids.replayButton.click({detail:1});assert(!h.ids.resultMore.open);assert(h.ids.resultOverlay.hidden);assert(!h.ids.missionHud.hidden);}
+  });
   test('Codex opens from briefing, traps keys, closes with Escape and restores focus without starting play',()=>{
     const h=harness(logic,{chapterId:'boarding'});h.ids.codexButton.click({detail:1});assert(!h.ids.codexOverlay.hidden);assert(h.ids.gameSurface.inert);assert.equal(h.document.activeElement,h.ids.closeCodex);h.step();const frozen=copy(h.state());h.key('ArrowUp');h.tap('Space');h.ids.startButton.click({detail:1});h.step(50);assert.deepEqual(copy(h.state()),frozen);h.tap('Tab');assert.equal(h.document.activeElement,h.ids.closeCodex);h.tap('Escape');assert(h.ids.codexOverlay.hidden);assert(!h.ids.gameSurface.inert);assert.equal(h.document.activeElement,h.ids.codexButton);
   });
@@ -117,7 +128,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     }
   });
   test('Timeout and WebGL failure during recovery never leave an invisible blocking overlay',()=>{
-    const h=harness(logic,{contextual:true});h.open();h.state().elapsed=99.9;h.choice(c=>!c.good);h.step(10);assert.equal(h.state().status,'finished');assert.equal(h.state().recovery,null);assert(h.ids.recoveryOverlay.hidden);assert(!h.ids.gameSurface.inert);
+    const h=harness(logic,{contextual:true});h.open();h.state().elapsed=99.9;h.choice(c=>!c.good);h.step(10);assert.equal(h.state().status,'finished');assert.equal(h.state().recovery,null);assert(h.ids.recoveryOverlay.hidden);assert(h.ids.resultOverlay.hidden===false);assert(h.ids.gameSurface.inert);
     const f=harness(logic,{contextual:true});f.open(true);f.choice(c=>!c.good);f.api.fail(Error('context lost'));assert(f.ids.recoveryOverlay.hidden);assert(!f.ids.webglError.hidden);
   });
   test('Pause controls keep native Enter and Space activation when a recovery is behind them',()=>{
