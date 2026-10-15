@@ -1,6 +1,7 @@
-import {boardingTaskActor,boardingEvidence} from './boarding.mjs?v=0.7.1';
+import {boardingTaskActor} from './boarding.mjs?v=0.7.2';
 import * as THREE from './vendor/three.module.min.js';
-import {passengerPose,actionPose,serviceItemPose,trolleyPresentation,GALLEY_SUPPLY,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.7.1';
+import {passengerPose,actionPose,serviceItemPose,trolleyPresentation,GALLEY_SUPPLY,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.7.2';
+
 
 // Gameplay and scene share x/z coordinates. Both cameras face +z along the
 // centreline, so screen-right input is world -x, and screen-up is world +z.
@@ -168,8 +169,8 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       box(hair,[side*.105,standing?-.28:.23,standing?-.21:-.47],[.16,.14,.27],[0,0,0],root);
     }
     if(style===2)box('gold',[0,.03,-.192],[.34,.025,.025],[0,0,0],head);
-    const mouth=box('rose',[0,-.09,-.185],[.065,.015,.012],[0,0,0],head);
-    const mouthCorners=[-1,1].map(side=>box('rose',[side*.04,-.085,-.186],[.03,.015,.012],[0,0,0],head));
+    const mouth=box('rose',[0,-.09,-.185],[.065,.015,.012],[0,0,0],head);mouth.name='mouth';
+    const mouthCorners=[-1,1].map(side=>{const m=box('rose',[side*.04,-.085,-.186],[.03,.015,.012],[0,0,0],head);m.name=`mouth-corner-${side}`;return m;});
     const arms=[];
     for(const side of [-1,1]){
       const arm=group(body);arm.position.set(side*.24,1.12,-.08);
@@ -435,6 +436,9 @@ export function createCabinView(canvas, { onContextLost } = {}) {
   canvas.addEventListener('webglcontextlost',contextLost,false);
   function render(state, dt = 0) {
     if (disposed) return {labels:[]}; resize();
+    // Boarding keeps the aisle clear of the movable service cart and supply cart.
+    const showServiceProps=!state.boarding&&state.chapterId!=='boarding';
+    trolley.visible=showServiceProps;galleyDrawer.visible=showServiceProps;
     const player = state.player || {x:0,z:1.5,angle:0,walking:false,step:0};
     const playing = state.status === 'playing' && !state.dialog && !state.lesson, reducedMotion = Boolean(state.reducedMotion);
     for(const halo of halos.values())halo.visible=false;
@@ -443,7 +447,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     if(state.runId!==eventRun){eventRun=state.runId;eventSeq=0;reactions.clear();visualTime=0;}
     if(state.status!=='paused'&&!state.lesson&&state.status!=='briefing')visualTime+=Math.min(Math.max(dt,0),.1);
     for(const e of state.events||[])if(e.seq>eventSeq){
-      eventSeq=e.seq;if(['mistake','complete'].includes(e.type))reactions.set(e.taskId,{type:e.type,at:visualTime});
+      eventSeq=e.seq;if(['mistake','correct','complete'].includes(e.type))reactions.set(e.taskId,{type:e.type,at:visualTime});
     }
     const targets = (state.renderTargets || []).filter(t => t.active !== false && !t.done);
     const selectedId = state.action?.hazardId || state.action?.taskId || state.dialog?.id || state.dialog?.taskId || (typeof state.near === 'string' ? state.near : state.near?.id);
@@ -464,7 +468,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
         actor.body.position.y=pose.bodyY;actor.head.rotation.x=pose.headX;
         actor.head.rotation.y=(selected?Math.atan2(actor.root.position.x-player.x,-(player.z-actor.root.position.z)):0)+pose.headY;
         actor.eyes.forEach(e=>e.scale.y=.024*pose.eyeScaleY);
-        actor.brows.forEach((b,i)=>b.rotation.z=(i?1:-1)*pose.browAngle);actor.mouthCorners.forEach((m,i)=>{const curve=task?.late?-.6:pose.smile;m.rotation.z=(i?1:-1)*curve*.6;m.position.y=-.09+curve*.018;});actor.mouth.rotation.z=0;actor.mouth.position.y=pose.mouthY;actor.mouth.scale.y=.015*pose.mouthScale;actor.eyes.forEach(e=>e.scale.x=.019*pose.eyeScaleX);
+        actor.brows.forEach((b,i)=>b.rotation.z=(i?1:-1)*pose.browAngle);actor.mouthCorners.forEach((m,i)=>{const curve=pose.smile>0?pose.smile:task?.late?-.6:0;m.rotation.z=(i?1:-1)*curve*.6;m.position.y=-.09+curve*.018;});actor.mouth.rotation.z=0;actor.mouth.position.y=pose.mouthY;actor.mouth.scale.y=.015*pose.mouthScale;actor.eyes.forEach(e=>e.scale.x=.019*pose.eyeScaleX);
         actor.arms[0].rotation.x=pose.leftArmX;actor.arms[1].rotation.x=pose.rightArmX;
         if(task&&state.action?.taskId===task.id&&state.action.kind==='task'){
           const q=actionPose({taskId:task.id,choiceId:state.action.choice?.id,progress:state.action.time/state.action.duration,reducedMotion});
@@ -491,9 +495,17 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       actor.root.visible=true;actor.root.position.set(a.x,a.status==='seated'?0:.5,a.z);
       actor.root.rotation.y=a.status==='seated'?0:a.status==='waiting'?Math.atan2(a.x-player.x,-(player.z-a.z)):(a.angle??Math.PI);
       const stride=!reducedMotion&&a.status==='walking'?Math.sin(a.distance*7)*.10:0;
-      actor.body.position.y=Math.abs(stride)*.12;actor.arms[0].rotation.x=stride;actor.arms[1].rotation.x=-stride;
+      const task=tasks.find(t=>t.id===a.taskId),r=task&&reactions.get(task.id),reaction=r?{type:r.type,age:visualTime-r.at}:null;
+      const pose=passengerPose({time:visualTime,phase:actor.phase,style:actor.style,selected:selectedId===a.taskId,reaction,mood:task?.done?'happy':'neutral',reducedMotion});
+      if(state.status!=='paused'&&!state.lesson){
+        actor.body.position.y=Math.abs(stride)*.12+pose.bodyY;actor.head.rotation.x=pose.headX;actor.head.rotation.y=pose.headY;
+        actor.eyes.forEach(e=>{e.scale.y=.024*pose.eyeScaleY;e.scale.x=.019*pose.eyeScaleX;});actor.brows.forEach((b,i)=>b.rotation.z=(i?1:-1)*pose.browAngle);
+        actor.mouthCorners.forEach((m,i)=>{m.rotation.z=(i?1:-1)*pose.smile*.6;m.position.y=-.09+pose.smile*.028;});actor.mouth.position.y=pose.mouthY;actor.mouth.scale.y=.015*pose.mouthScale;
+        actor.arms[0].rotation.x=stride+pose.leftArmX;actor.arms[1].rotation.x=-stride+pose.rightArmX;
+      }
+
       pair.card.visible=a.id!=='parent'&&(a.status==='waiting'||state.dialog?.id===a.taskId);if(pair.familyBag)pair.familyBag.visible=!tasks.find(t=>t.id==='family')?.done;
-      if(a.taskId&&(a.taskId!=='seat'||a.id==='seat-owner')){const h=haloFor(a.taskId);h.visible=selected?.id===a.taskId;h.position.set(a.x,2.18,a.z);h.rotation.x=Math.PI/2;}
+      if(a.taskId&&(a.taskId!=='seat'||a.id==='seat-owner')){const h=haloFor(a.taskId);h.visible=selected?.id===a.taskId||reaction?.type==='correct'&&reaction.age<1.4;h.position.set(a.x,2.18,a.z);h.rotation.x=Math.PI/2;}
     }
     const elderTask=!state.boarding&&tasks.find(t=>t.characterId==='elder');
     if(!elderTask)returningElder.root.visible=false;
@@ -560,9 +572,10 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       const actor=task&&(pair?.standing||(task.characterId==='elder'&&!state.boarding?returningElder:passengers.get(`${task.row}-${task.side==='right'?2:1}`)));
       const head=actor?.head.getWorldPosition(new THREE.Vector3());
       const anchor=head?{x:head.x,y:head.y+.31,z:head.z}:{x:target.id==='report'?.65:target.x||0,y:hazard?2.45:.5,z:target.z};
-      return {id:target.id,text:task?.title||target.label||target.id,anchor,
+      const success=!!state.boarding&&!!actor&&reactions.get(target.id)?.type==='correct'&&visualTime-reactions.get(target.id).at<1.4;
+      return {id:target.id,text:success?'謝謝你！':task?.title||target.label||target.id,anchor,
         ...projectGamePoint(camera,anchor,sizeWidth,sizeHeight),
-        icon:target.kind==='hazard'?'alert':task?.id==='water'?'water':task?.id==='blanket'?'blanket':['question','guide','family'].includes(task?.id)?'question':target.kind==='report'?'report':'alert',
+        icon:success?'report':target.kind==='hazard'?'alert':task?.id==='water'?'water':task?.id==='blanket'?'blanket':['question','guide','family'].includes(task?.id)?'question':target.kind==='report'?'report':'alert',
         kind:target.kind||'safety',distance:Math.hypot((target.x||0)-player.x,target.z-player.z),
         near:target.id===(typeof state.near==='string'?state.near:state.near?.id),selected:target.id===selected?.id};
     });
@@ -583,12 +596,8 @@ export function createCabinView(canvas, { onContextLost } = {}) {
         ...projectGamePoint(camera,{x:questionRecord.x+questionRecord.side*.30,y:1.55,z:questionRecord.z-.43},sizeWidth,sizeHeight),kind:'detail',near:false,selected:false});
     }
     if(state.boarding){
-      for(const [row,z] of CABIN_ROWS.entries())if(Math.abs(z-player.z)<3.1||state.dialog?.id==='guide'&&row===2)labels.push({id:`boarding-seat-row-${row}`,text:`第 ${row+1} 排 · B 左 / C 右`,...projectGamePoint(camera,{x:1.9,y:1.7,z},sizeWidth,sizeHeight),kind:'detail',near:false,selected:false});
-      const task=tasks.find(t=>t.id===selectedId),actor=task&&boardingTaskActor(state,task.id);
-      if(task&&actor)for(const [i,card] of boardingEvidence(task).slice(0,2).entries()){
-        const speaker=i===1?state.boarding.actors.find(a=>a.id==='seat-misread'):actor;
-        labels.push({id:`boarding-pass-${i}`,text:card.value,...projectGamePoint(camera,{x:speaker.x,y:2.45,z:speaker.z},sizeWidth,sizeHeight),kind:'detail',near:false,selected:false});
-      }
+      for(const [row,z] of CABIN_ROWS.entries())if(Math.abs(z-player.z)<3.1||state.dialog?.id==='guide'&&row===2)labels.push({id:`boarding-seat-row-${row}`,text:`${row+1} · D C │ B A`,...projectGamePoint(camera,{x:1.9,y:1.7,z},sizeWidth,sizeHeight),kind:'detail',near:false,selected:false});
+
     }
     const speakerTask=tasks.find(t=>t.id===state.dialog?.id),speakerActor=speakerTask&&(state.boarding?boardingActors.get(boardingTaskActor(state,speakerTask.id)?.id)?.standing:speakerTask.characterId==='elder'?returningElder:passengers.get(`${speakerTask.row}-${speakerTask.side==='right'?2:1}`));
     const speaker=speakerActor?projectGamePoint(camera,{x:speakerActor.root.position.x,y:1.95,z:speakerActor.root.position.z},sizeWidth,sizeHeight):null;

@@ -4,14 +4,14 @@ const smooth=n=>{const t=clamp(n);return t*t*(3-2*t);};
 export function passengerPose({style=0,phase=0,time=0,selected=false,reaction=null,mood='neutral',reducedMotion=false}={}) {
   const t=reducedMotion?0:time+phase, idle=reducedMotion?0:1;
   const weight=reaction?clamp(1-reaction.age/1.4):0;
-  const wrong=!reducedMotion&&reaction?.type==='mistake', nod=!reducedMotion&&reaction?.type==='complete';
+  const happy=weight>0&&['correct','complete'].includes(reaction?.type),wrong=!reducedMotion&&weight>0&&reaction?.type==='mistake', nod=!reducedMotion&&happy;
   return {bodyY:Math.sin(t*1.6)*.012*idle,
     headX:(style===2?.12:0)+Math.sin(t*.7)*.035*idle+(nod?Math.sin(reaction.age*11)*.18*weight:0),
     headY:(selected?0:(style===1?.38:Math.sin(t*.45)*.10)*idle)+(wrong?Math.sin(reaction.age*14)*.28*weight:0),
     eyeScaleY:!reducedMotion&&t%4.7>4.54?.12:1,
     leftArmX:style===2?-.35:Math.sin(t*.7)*.04*idle,
-    rightArmX:style===3?-.28:Math.sin(t*.7+1)*.04*idle,
-    browAngle:wrong?weight*.3:mood==='waiting'?.22:mood==='curious'?-.12:0,smile:nod?weight:mood==='happy'?.8:0,mouthY:mood==='waiting'?-.105:-.09,mouthScale:mood==='curious'?1.5:1,eyeScaleX:mood==='waiting'?.75:1};
+    rightArmX:happy&&!reducedMotion?-.7*weight:style===3?-.28:Math.sin(t*.7+1)*.04*idle,
+    browAngle:wrong?weight*.3:mood==='waiting'?.22:mood==='curious'?-.12:0,smile:happy?Math.max(.8,weight):mood==='happy'?.8:0,mouthY:mood==='waiting'?-.105:-.09,mouthScale:mood==='curious'?1.5:1,eyeScaleX:mood==='waiting'?.75:1};
 }
 export function actionPose({taskId,choiceId,progress=0,reducedMotion=false}={}) {
   const p=clamp(progress), gesture=reducedMotion?0:Math.sin(Math.PI*smooth(p));
