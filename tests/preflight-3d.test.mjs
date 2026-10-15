@@ -144,7 +144,7 @@ function test(name,run) {
 test('world contract has six rows, 100-second clock and isolated state',()=>{
   assert.deepEqual(WORLD.rows,[3,5,7,9,11,13]);approx(WORLD.radius,.23);approx(WORLD.speed,2.35);
   approx(WORLD.interactionRadius,1.1);approx(WORLD.minZ,.45);approx(WORLD.maxZ,15.5);
-  const a=createState({seed:7}),b=createState({seed:7});assert.deepEqual(a,b);
+  const a=createState({seed:7}),b=createState({seed:7});assert.notEqual(a.runId,b.runId);assert.deepEqual({...a,runId:null},{...b,runId:null});
   assert.equal(a.duration,100);assert.equal(a.status,'briefing');assert.equal(a.tasks.length,6);
   assert.equal(a.safety,100);assert.equal(a.comfort,80);assert.equal(a.completed,0);
   assert.equal(a.handoffTokens,1);assert.equal(a.handoffJob,null);assert.equal(a.lesson,null);
@@ -311,8 +311,7 @@ test('handoff takes 3 seconds then 12 background seconds and provides reduced cr
   const s=fresh(7);openTask(s,'water');const before=s.comfort;pick(s,c=>c.handoff);
   assert.equal(s.action.duration,3);assert.equal(s.handoffTokens,1);advance(s,3-DT);assert.equal(task(s,'water').assigned,false);
   frame(s);assert.equal(s.handoffTokens,0);assert.equal(task(s,'water').assigned,true);assert.equal(task(s,'water').done,false);
-  approx(s.handoffJob.remaining,12);assert.equal(s.lesson.id,'handoff');const frozen=clone(s);
-  advance(s,20,{autoLessons:false});assert.deepEqual(s,frozen);dismiss(s);
+  approx(s.handoffJob.remaining,12);assert.equal(s.lesson,null);
   advance(s,12-DT);assert.equal(task(s,'water').done,false);frame(s);assert.equal(task(s,'water').done,true);
   assert.equal(task(s,'water').handoff,true);assert.equal(s.handoffJob,null);assert.equal(s.handoffTokens,0);
   assert.equal(s.comfort,before+3);
@@ -438,7 +437,7 @@ test('practice retry survives pause, remains untimed and does not contaminate fo
 });
 test('fresh replay clears task completion, penalties, jobs, lessons, dialogs, clocks and position',()=>{
   const used=fresh(7);serve(used,'water','handoff');openTask(used,'bag');pick(used,c=>!c.good);
-  const replay=createState({seed:7});assert.deepEqual(replay,createState({seed:7}));
+  const replay=createState({seed:7});assert.deepEqual({...replay,runId:null},{...createState({seed:7}),runId:null});
   assert.equal(replay.elapsed,0);assert.equal(replay.safetyErrors,0);assert.equal(replay.servicePenalty,0);
   assert.equal(replay.handoffTokens,1);assert.equal(replay.handoffJob,null);assert.deepEqual(replay.lessonSeen,[]);
   assert.equal(replay.player.z,1.5);assert(replay.tasks.every(t=>!t.done&&!t.assigned&&!t.acknowledged));

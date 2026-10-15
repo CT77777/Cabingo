@@ -20,6 +20,15 @@ const LESSONS = {
   correction: { title: '可以補救，紀錄會保留', copy: '正式巡艙先顯示 2 秒修正回饋，再重新選擇。安全失誤 1 次保留修正評價；2 次本輪需重試，仍可練習。' },
   handoff: { title: '這次交接用掉了', copy: '服務交接每輪只有 1 次。交接後同事需要 12 秒才送達，回饋較少；名額不會恢復，其他需求要自己安排。' }
 };
+let runSerial = 0;
+function emit(s,type,taskId=null,detail={}) {
+ s.events.push({runId:s.runId,seq:++s.eventSeq,type,taskId,actionId:s.action?.id??null,detail});
+ if(s.events.length>64)s.events.splice(0,s.events.length-64);
+}
+export function readEvents(s,cursor) {
+ return {events:s.events.filter(e=>cursor?.runId!==s.runId||e.seq>cursor.seq),cursor:{runId:s.runId,seq:s.eventSeq}};
+}
+function beginAction(s, action) { s.action={...action,id:++s.actionSerial};emit(s,"action-start",action.taskId,{choiceId:action.choice?.id,kind:action.kind}); }
 const EPSILON = 1e-9;
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 function rng(seed) {
@@ -58,6 +67,7 @@ export function createState(options = {}) {
     };
   });
   const s = {
+    runId: `run-${++runSerial}`, eventSeq:0, events:[], actionSerial:0,
     chapter: 1, seed, practice: !!practice, status: 'briefing', elapsed: 0, duration: 100,
     cameraMode: 'follow', reducedMotion: false,
     player: { x: 0, z: 1.5, angle: 0, walking: false, step: 0 },
@@ -75,6 +85,7 @@ export function createState(options = {}) {
 export function start(s) {
   if (s.status !== 'briefing') return false;
   s.status = 'playing';
+  for(const t of s.tasks)if(t.active&&t.kind==='service')emit(s,'demand',t.id);
   updateNear(s);
   return true;
 }
@@ -194,7 +205,7 @@ function choicesFor(s, t) {
     ];
   }
   t.quote = quote; t.description = description;
-  return { id: t.id, title: t.title, quote, description, choices: shuffle(choices, rng(s.seed + s.decisionSerial++ * 97)) };
+  return { handoffHint: choices.some(c=>c.handoff) ? '每輪限 1 次。安排需 3 秒，同事再過 12 秒送達；服務回饋較少。' : null, id: t.id, title: t.title, quote, description, choices: shuffle(choices, rng(s.seed + s.decisionSerial++ * 97)) };
 }
 
 export function interact(s) {
@@ -203,7 +214,7 @@ export function interact(s) {
   updateNear(s);
   const hazard = s.hazards.find(h => h.id === s.near && !h.done);
   if (hazard) {
-    s.action = { kind: 'clear-hazard', taskId: hazard.taskId, hazardId: hazard.id, time: 0, duration: 5, choice: null };
+    beginAction(s, { kind: 'clear-hazard', taskId: hazard.taskId, hazardId: hazard.id, time: 0, duration: 5, choice: null });
     s.player.walking = false; feedback(s, `${hazard.seat} · 協助旅客返回座位，恢復走道。`); return true;
   }
   if (s.near === 'report') {
@@ -227,6 +238,8 @@ export function choose(s, index) {
   if (s.status !== 'playing' || !s.dialog || s.lesson || s.action || !Number.isInteger(index)) return false;
   const t = s.tasks.find(t => t.id === s.dialog.id), choice = s.dialog.choices[index];
   if (!t || !choice) return false;
+  emit(s,'choice',t.id,{choiceId:choice.id});
+  if(!choice.good)emit(s,'mistake',t.id,{choiceId:choice.id});
   const decision = s.dialog;
   s.dialog = null; s.player.walking = false;
   if (!choice.good) {
@@ -243,10 +256,10 @@ export function choose(s, index) {
       if (t.kind === 'safety' || choice.safetyError) { s.safetyErrors++; s.safety = clamp(s.safety - 20, 0, 100); }
       else penalizeService(s, 9);
     }
-    s.action = { kind: 'correction', taskId: t.id, time: 0, duration: 2, choice };
+    beginAction(s, { kind: 'correction', taskId: t.id, time: 0, duration: 2, choice });
     feedback(s, choice.feedback, 'warning'); showLesson(s, 'correction');
   } else {
-    s.action = { kind: choice.handoff ? 'handoff' : choice.ack ? 'wait' : 'task', taskId: t.id, time: 0, duration: choice.duration, choice };
+    beginAction(s, { kind: choice.handoff ? 'handoff' : choice.ack ? 'wait' : 'task', taskId: t.id, time: 0, duration: choice.duration, choice });
     feedback(s, t.kind === 'safety' ? '依眼前情境完成確認…' : choice.handoff ? '聯繫同事交接，完成後仍需等候送達…' : choice.ack ? '正在說明等候安排…' : '正在協助旅客…');
   }
   return true;
@@ -272,7 +285,7 @@ function penalizeService(s, amount) {
 }
 function creditService(s, amount) { s.comfort = clamp(s.comfort + amount, 0, Math.max(0, 100 - s.servicePenalty)); }
 function completeTask(s, t, handoff = false) {
-  t.done = true; t.assigned = false; t.handoff = handoff; t.completedAt = s.elapsed; s.completed++;
+  t.done = true; t.assigned = false; t.handoff = handoff; t.completedAt = s.elapsed; s.completed++; emit(s,'complete',t.id,{handoff});
   if (t.kind === 'service') creditService(s, handoff ? (t.late ? 1 : 3) : (t.late ? 3 : 7));
 }
 function finishAction(s) {
@@ -280,7 +293,7 @@ function finishAction(s) {
   s.action = null;
   if (a.kind === 'clear-hazard') {
     const h = s.hazards.find(h => h.id === a.hazardId);
-    if (h && !h.done) { h.done = true; s.hazardsCleared++; }
+    if (h && !h.done) { h.done = true; s.hazardsCleared++; emit(s,'hazard-clear',h.taskId); }
     feedback(s, '走道已恢復。原本的服務需求仍需處理，紅色事件不等於已送達。', 'good');
   } else if (a.kind === 'correction') feedback(s, `${a.choice.feedback} 可按 E 重選；本次失誤仍保留。`, 'warning');
   else if (t) {
@@ -288,14 +301,14 @@ function finishAction(s) {
     else if (a.choice.handoff) { s.handoffTokens--; t.assigned = true; s.handoffJob = { taskId: t.id, remaining: 12 }; }
     else completeTask(s, t);
     feedback(s, a.choice.feedback, 'good');
-    if (a.choice.handoff) showLesson(s, 'handoff');
+
   }
   updateNear(s);
 }
 function demandTick(s) {
   for (const t of s.tasks) {
     if (t.kind !== 'service') continue;
-    if (!t.active && s.elapsed + EPSILON >= t.spawn) { t.active = true; feedback(s, `${t.seat} 新需求：${t.title}`); }
+    if (!t.active && s.elapsed + EPSILON >= t.spawn) { t.active = true; emit(s,'demand',t.id); feedback(s, `${t.seat} 新需求：${t.title}`); }
     if (!t.active || t.done || t.assigned || (s.action?.taskId === t.id && s.action.kind !== 'correction')) continue;
     const age = s.elapsed - t.spawn;
     if (!t.warned && age + EPSILON >= t.patience - 10) { t.warned = true; feedback(s, `${t.seat} 等候接近上限；10 秒內未回應，可能走到走道詢問。`, 'warning'); }
@@ -313,7 +326,7 @@ function finish(s, reason) {
   s.status = 'finished'; s.endReason = reason; s.dialog = null; s.action = null; s.lesson = null;
   s.player.walking = false;
   s.grade = reason !== 'complete' || !chapterReady(s) ? 'incomplete' : s.safetyErrors >= 2 ? 'retry' : s.safetyErrors === 1 ? 'recovered' : 'clean';
-  s.result = s.grade;
+  s.result = s.grade; emit(s,'finish',null,{grade:s.grade});
   feedback(s, reason === 'complete' ? '巡艙回報完成。' : '行動時間已用完，查看本輪回顧。', s.grade === 'clean' || s.grade === 'recovered' ? 'good' : 'warning');
 }
 export function tick(s, dt, input = { x: 0, z: 0 }) {

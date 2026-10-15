@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import * as game from '../public/preflight.mjs';
+const a=game.createState({seed:7}),b=game.createState({seed:7});
+assert.notEqual(a.runId,b.runId);
+game.start(a);
+const first=game.readEvents(a,null);
+assert(first.events.some(e=>e.type==='demand'&&e.taskId==='water'));
+assert.deepEqual(game.readEvents(a,first.cursor).events,[]);
+assert.equal(game.readEvents(b,first.cursor).cursor.runId,b.runId);
+// Isolated rule fixture: entering a service dialog must explain handoff before choosing.
+const s=game.createState({seed:7,practice:true});game.start(s);
+const water=s.tasks.find(t=>t.id==='water');s.player.z=water.z;s.near='water';
+game.interact(s);
+assert(s.dialog.handoffHint.includes('12 秒'));
+assert.equal(s.handoffTokens,1);
+let cursor=game.readEvents(s,null).cursor;
+for(let i=0;i<40;i++)game.choose(s,s.dialog.choices.findIndex(c=>!c.good));
+assert(s.events.length<=64);
+assert.equal(game.readEvents(s,cursor).events.filter(e=>e.type==='mistake').length,32);
+const handoff=s.dialog.choices.findIndex(c=>c.handoff&&c.good);
+assert(handoff>=0);game.choose(s,handoff);
+for(let i=0;i<31;i++)game.tick(s,.1);
+assert.equal(s.lesson,null);assert.equal(s.handoffTokens,0);
+assert(!s.events.some(e=>e.type==='complete'));
+for(let i=0;i<121;i++)game.tick(s,.1);
+assert(s.events.some(e=>e.type==='complete'&&e.taskId==='water'&&e.detail.handoff));
+console.log('PASS event uniqueness, bounded queue, practice retries and handoff timing');
