@@ -21,11 +21,13 @@ globalThis.__CabinMockRenderer=class {
 const approx=(a,b,message='')=>assert(Math.abs(a-b)<1e-8,`${message}: ${a} versus ${b}`);
 const object=name=>{const result=lastScene.getObjectByName(name);assert(result,`object ${name} exists`);return result;};
 try {
+  fs.copyFileSync(path.join(root,'public/presentation.mjs'),path.join(temp,'presentation.mjs'));
   fs.copyFileSync(path.join(root,'public/vendor/three.core.min.js'),path.join(temp,'three.core.mjs'));
   fs.writeFileSync(path.join(temp,'three.module.mjs'),fs.readFileSync(path.join(root,'public/vendor/three.module.min.js'),'utf8').replaceAll('./three.core.min.js','./three.core.mjs'));
   const transformed=source.replace("import * as THREE from './vendor/three.module.min.js';","import * as Three from './three.module.mjs';\nconst THREE={...Three,WebGLRenderer:globalThis.__CabinMockRenderer};");
   assert.notEqual(transformed,source,'only scene renderer import is replaced');
   fs.writeFileSync(path.join(temp,'scene.mjs'),transformed);
+  const {Box3}=await import(pathToFileURL(path.join(temp,'three.core.mjs')));
   const {createCabinView,createProjectionCamera,projectGamePoint,screenInputToWorld,INTERACTION_RADIUS,CABIN_ROWS}=await import(pathToFileURL(path.join(temp,'scene.mjs')));
   assert.deepEqual(CABIN_ROWS,[3,5,7,9,11,13]);assert.equal(INTERACTION_RADIUS,1.1);
   assert.deepEqual(screenInputToWorld(1,1),{x:-1,z:1});
@@ -58,6 +60,12 @@ try {
       {id:'tray',x:0,z:11,kind:'safety',label:'餐桌',active:true},
       {id:'water',x:0,z:3,kind:'service',label:'水',active:true},
       {id:'hazard-water',x:0,z:4.2,kind:'hazard',label:'走道旅客',active:true}]});
+  view.render(makeState(),.016);
+  const passengers=[];lastScene.traverse(o=>{if(/^passenger-\d+-\d+$/.test(o.name))passengers.push(o);});
+  assert.equal(passengers.length,24,'24 articulated passengers');
+  const head=object('passenger-0-0').getObjectByName('head');const beforeHead=head.rotation.y;
+  view.render(makeState(),.8);assert.notEqual(head.rotation.y,beforeHead,'idle animation changes');
+  const paused=makeState();paused.status='paused';view.render(paused,.1);const frozenHead=head.rotation.y;view.render(paused,1);approx(head.rotation.y,frozenHead);
   let previousBagGroup=null,oldObjectiveDisposed=0;
   for(const side of ['left','right'])for(const variant of [0,1,2])for(const z of [3,7,13]) {
     const s=makeState(variant,side,z),result=view.render(s,.016);
@@ -70,6 +78,8 @@ try {
     const ring=object('interaction-radius-1.1');assert.equal(ring.geometry.parameters.outerRadius,1.1);approx(ring.scale.x,1);approx(ring.position.x,0);approx(ring.position.z,z);
     let rings=0;lastScene.traverse(o=>{if(o.geometry?.type==='RingGeometry')rings++;});assert.equal(rings,1,'only one interaction ring');
     const bagGroup=object('objective-bag');if(previousBagGroup)assert.equal(previousBagGroup.parent,null,'old variant/row detached');previousBagGroup=bagGroup;
+    lastScene.updateMatrixWorld(true);
+    for(const name of ['available-bin','full-bin']){const bin=bagGroup.getObjectByName(name);if(bin){const bounds=new Box3().setFromObject(bin);assert(bounds.min.x>=-3.1&&bounds.max.x<=3.1,'bin and open door stay inside cabin');}}
     const bag=object('task-luggage');approx(bag.position.y,variant===2?2.43:.46);if(variant!==2)approx(bag.position.x,0,'floor bag matches collision centre');
     assert.equal(Boolean(bagGroup.getObjectByName('full-bin')),variant===1);
     assert.equal(object('unfastened-belt').visible,variant!==2);assert.equal(object('fastened-belt').visible,variant===2);
@@ -123,6 +133,10 @@ try {
     s.status='playing';s.dialog=null;s.lesson=null;
   }
   s.reducedMotion=true;view.render(s,.016);approx(body.position.y,0,'reduced motion removes walk bob');
+  const deliveryState=makeState();deliveryState.action={id:77,kind:'task',taskId:'water',time:4,duration:8,choice:{id:'serve'}};
+  view.render(deliveryState,.016);const cup=object('delivery-water');assert(cup.visible);const cupAt=cup.position.clone();
+  deliveryState.status='paused';view.render(deliveryState,1);assert(cup.position.equals(cupAt));
+  deliveryState.status='playing';deliveryState.action=null;deliveryState.tasks.find(t=>t.id==='water').done=true;view.render(deliveryState,.016);assert(cup.visible);approx(cup.position.x,1.25);
   const allGeometry=new Set(),allMaterials=new Set();lastScene.traverse(o=>{if(o.geometry)allGeometry.add(o.geometry);if(o.material)allMaterials.add(o.material);});
   let geometryDisposals=0,materialDisposals=0;
   for(const g of allGeometry)g.addEventListener('dispose',()=>geometryDisposals++);
