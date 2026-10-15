@@ -2,7 +2,7 @@
 
 2026-10-15 · Claude Code 原始規劃，Codex 更新進度 · 對象：後續實作者
 
-2026-10-15 23:57（Asia/Taipei）查核。狀態快照以 `main@c787a3d` 為準。接手操作與風險見 [最新交接文件](2026-10-15-development-handoff.md)。PR 狀態會變動，開工前須重新查核。
+2026-10-16 00:34（Asia/Taipei）查核。狀態快照以 `main@ef58679` 為準。接手操作與風險見 [最新交接文件](2026-10-15-development-handoff.md)。PR 狀態會變動，開工前須重新查核。
 
 ## 目前進度
 
@@ -15,7 +15,8 @@
 | M1 登機教學、人流與跨章記憶 | 已合併 [PR #3](https://github.com/CT77777/Cabingo/pull/3) | [M1 驗收](../validation/2026-10-15-m1.md)；人流與真人平衡仍待追蹤 |
 | 走道移動引導、服務示範、對話精簡 | 已合併 [PR #4](https://github.com/CT77777/Cabingo/pull/4) | [走道驗收](../validation/2026-10-15-aisle-escort.md) |
 | M2 結算解說與通關收藏卡 | 已合併 [PR #5](https://github.com/CT77777/Cabingo/pull/5) | [收藏卡驗收](../validation/2026-10-15-collectible-cards.md)、[初版 M2／人流觀察](../validation/2026-10-15-m2.md)；8 張插畫卡、來源與本機保存 |
-| 登機圖像線索、逐步教學、答對反應 | 待合併 [PR #6](https://github.com/CT77777/Cabingo/pull/6) | `feat/boarding-visual-tutorial`；本次未列為 main 已完成，需與 M2 整合驗收 |
+| 登機圖像線索、逐步教學、答對反應 | 已合併 [PR #6](https://github.com/CT77777/Cabingo/pull/6) | [登機視覺與 M2 整合驗收](../validation/2026-10-15-boarding-visual-tutorial.md) |
+| 中央結算、短慶祝與上方任務資訊 | 已隨 PR #6 合併 | [中央結算驗收](../validation/2026-10-16-centered-results.md)；保留收藏獎勵與鍵盤焦點 |
 | M3 第 3、4 章及劇本事件系統 | 尚未實作 | 接續的主線開發目標 |
 | M4 第 5 章亂流、M5 動態事件、M6 學習擴充 | 尚未實作 | 依下列里程碑順序進行 |
 | 語音／AI 回報 | 僅可行性文件 | [方案與限制](2026-10-15-voice-report-feasibility.md)；沒有錄音、辨識或模型功能 |
@@ -23,7 +24,7 @@
 ## 一、背景與目前狀態
 
 - 專案：`CT77777/Cabingo`（下列路徑皆相對倉庫根目錄），產品名稱 **Cabingo**。
-- main 套件版本 `0.7.1`。第 1 章正式 90 秒、第 2 章正式 100 秒；登機教學與不計時練習不消耗倒數。
+- main 套件版本 `0.7.3`。第 1 章正式 90 秒、第 2 章正式 100 秒；登機教學與不計時練習不消耗倒數。
 - 新玩家從登機開始；正式成功且至少一星才記錄章節、解鎖下一段。章節已解鎖但 `available:false` 時仍不能進入。
 - 現有演出包含配樂與音效、待機／反應、近景與下方選單、頭頂標籤、同事交接流程、物件取送與走道回座。這些不是新章節或完整資產製作流程。
 - 選定處理後直接短演出；走道事件需要走到安全光點。不要恢復重複按 E、綠區 QTE 或只有秒數的操作。
@@ -37,7 +38,7 @@
 | `public/presentation.mjs` | 姿態、鏡頭、標籤避讓、音效里程碑，不改變遊戲狀態。 |
 | `public/scene.js` | Three.js 場景，只讀取狀態繪製。 |
 | `public/main.js` | 輸入、介面、遊戲迴圈、localStorage。 |
-| `public/boarding.mjs` | 登機教學、人流、證件與座位事件。 |
+| `public/boarding.mjs`、`boarding-ui.mjs` | 登機教學、人流、證件與座位事件、圖像線索介面。 |
 | `public/chapters/`、`campaign.mjs` | 章節註冊、解鎖、v2 存檔與固定角色記憶。 |
 | `public/learning.mjs`、`knowledge/`、`assets/cards/` | 通關發卡、本局判斷、知識資料與原創 SVG。 |
 | `public/audio.mjs`、`results.mjs` | 合成音效與配樂、星等與最佳紀錄。 |
@@ -45,7 +46,7 @@
 
 - localStorage 鍵帶版本：`cabin3d-audio-v1`、`cabin3d-best-v1`、`cabin3d-lessons-v2`、`cabin3d-campaign-v2`、`cabin3d-codex-v1`。campaign v1 與舊最佳紀錄有相容匯入；不得刪除或直接覆寫未來版本。新增資料請沿用這個慣例。
 - 新玩家入口由 `createCampaign()` 決定為 `boarding`；`DEFAULT_CHAPTER_ID` 仍為 `preflight`，供舊規則 API 使用，不能拿來取代 campaign 的新玩家政策。
-- `createState` 預設 `handsOn:false`、`contextual:false` 以維持舊 API 相容；正式網頁明確使用 `handsOn:true, contextual:true`，選定處理後直接短演出，不重複 E 或綠區 QTE。
+- `createState` 預設 `handsOn:false`、`contextual:false` 以維持舊 API 相容；正式網頁明確使用 `handsOn:true, contextual:true, guidedBoarding:true`，選定處理後直接短演出，不重複 E 或綠區 QTE。
 
 ## 二、已確認的決策（不要自行推翻）
 
@@ -191,7 +192,7 @@
 
 ## 八、接下來的順序
 
-1. 先確認 PR #6 是否已合併；若仍開啟，先完成與最新 main 的整合。避免降回 0.6.2、蓋掉收藏卡或恢復舊版解鎖行為。
+1. 從最新 main 開始；PR #6 已整合收藏冊並合併，不需重做。確認保留圖像線索、逐步教學、中央結算與通關發卡。
 2. 追蹤登機不同排座位變體的人流停滯，使用固定種子重現，確認已完成全部工作後仍能入座及回報。PR #6 宣稱的種子路線通過不等於已修復原觀察。
 3. 補手機實機效能與真人教學測試；保存瀏覽器、裝置、種子與操作路線。桌面／手機尺寸驗收不能代替效能量測。
 4. 建立 M3 第 3 章所需的劇本事件與章節能力設定，再完成安全帶燈、組員座位及廣播操作。接著才做第 4 章餐車／托盤玩法。
@@ -236,3 +237,10 @@
 - 驗收見 `docs/validation/2026-10-15-m2.md`，含既有M1人流卡住的真人觀察；沒有宣稱已修復此問題。M3起及專業審閱仍待後續工作。
 
 - v0.7.1 收藏卡修訂驗收：`docs/validation/2026-10-15-collectible-cards.md`，原創SVG與來源小知識、新存檔0→4→8完整實測。
+
+### PR #6 實作說明（2026-10-16 更新）
+
+- 於 2026-10-16 00:33:42（Asia/Taipei）合併，main 合併提交 `ef5867945fc14870edc40cea1bafe19213b04e60`，套件版本 0.7.3。
+- 已整合 PR #5：保留收藏冊、正式通關獎勵、判斷複習、存檔與角色記憶；12 個種子路線驗證登機四張卡與非空複習情境。
+- 圖像登機證／座位圖、逐步教學、答對反應、登機隱藏餐車已完成；中央結算、成功短慶祝與上方任務區也隨本 PR 交付。
+- 最新既有驗收為 81 項規則、102 項控制器、306 項靜態版面與其他套件通過。詳見上方驗收連結；本次僅更新文件，未重跑遊戲測試或重新確認部署。
