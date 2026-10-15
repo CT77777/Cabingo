@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three.module.min.js';
-import {passengerPose,actionPose,decisionPose} from './presentation.mjs?v=0.4.4';
+import {passengerPose,actionPose,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.4.6-r2';
 
 // Gameplay and scene share x/z coordinates. Both cameras face +z along the
 // centreline, so screen-right input is world -x, and screen-up is world +z.
@@ -208,6 +208,11 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     const leg = group(crewBody); leg.position.set(side * .115, .64, 0);
     box('navy', [0, -.28, 0], [.16, .55, .16], [0,0,0], leg); box('deep', [0, -.58, .055], [.19, .13, .30], [0,0,0], leg); legs.push(leg);
   }
+  const colleague=crew.clone(true);colleague.name='coworker';scene.add(colleague);
+  colleague.traverse(node=>{if(node.isMesh&&node.material===mat('navy'))node.material=mat('mint');});
+  const colleagueBody=colleague.children[0],colleagueArms=arms.map(arm=>colleagueBody.children[crewBody.children.indexOf(arm)]),colleagueLegs=legs.map(leg=>colleagueBody.children[crewBody.children.indexOf(leg)]);
+  const colleagueCup=group(colleagueBody);colleagueCup.name='coworker-water';cylinder('cream',[0,.98,.38],[.07,.15,.07],[0,0,0],colleagueCup);
+  const colleagueBlanket=group(colleagueBody);colleagueBlanket.name='coworker-blanket';box('plum',[0,.98,.38],[.34,.10,.24],[0,0,0],colleagueBlanket);
   const shadow = new THREE.Mesh(ownGeometry(new THREE.CircleGeometry(.33, 24)), ownMaterial(new THREE.MeshBasicMaterial({ color: '#29483f', opacity: .14, transparent: true, depthWrite: false })));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = .143; scene.add(shadow);
   const ringMaterial = ownMaterial(new THREE.MeshBasicMaterial({ color: '#f6ce78', transparent: true, opacity: .96, side: THREE.DoubleSide, depthWrite: false }));
@@ -372,10 +377,12 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     }
     if(record.delivery){
       const self=activeAction&&state.action.choice?.id==='serve';
-      record.delivery.visible=task.done||self;
+      const colleagueState=coworkerPresentation(state),delegated=colleagueState.taskId===task.id&&colleagueState.phase==='serving';
+      record.delivery.visible=task.done||self||delegated&&colleagueState.transfer>0;
       if(task.done)record.delivery.position.set(record.x,1.04,record.z-.35);
+      else if(delegated){const q=colleagueState.transfer;record.delivery.position.set(colleagueState.carryX*(1-q)+record.x*q,1.11-.07*q,colleagueState.carryZ*(1-q)+(record.z-.35)*q);}
       else if(self){const q=smooth((p-.12)/.7);record.delivery.position.set((state.player.x||0)*(1-q)+record.x*q,1.25-.21*q,(state.player.z||record.z)*(1-q)+(record.z-.35)*q);}
-      if(record.service)record.service.visible=!task.done&&!self;
+      if(record.service)record.service.visible=!task.done&&!self&&!(delegated&&colleagueState.transfer>.5);
     }
   }
   let resized = false, sizeWidth = 0, sizeHeight = 0, disposed = false, firstFrame = true, previousMode = null, walkPose = 0;
@@ -448,6 +455,14 @@ export function createCabinView(canvas, { onContextLost } = {}) {
         crewBody.rotation.x=q.bodyPitch;
       }
     }else crewBody.rotation.x=0;
+    const colleagueState=coworkerPresentation(state),colleagueTask=tasks.find(t=>t.id===colleagueState.taskId);
+    colleague.position.set(colleagueState.x,.13,colleagueState.z);
+    colleague.rotation.y=colleagueState.angle||0;
+    const stride=colleagueState.walking&&!reducedMotion?Math.sin((state.elapsed||0)*10)*.4:0;
+    colleagueLegs[0].rotation.x=stride;colleagueLegs[1].rotation.x=-stride;
+    colleagueArms[0].rotation.x=colleagueState.carrying?-.8:-stride*.5;colleagueArms[1].rotation.x=colleagueState.carrying?-.8:stride*.5;
+    colleagueCup.visible=colleagueState.carrying&&colleagueState.transfer===0&&colleagueTask?.id==='water';
+    colleagueBlanket.visible=colleagueState.carrying&&colleagueState.transfer===0&&colleagueTask?.id==='blanket';
     shadow.position.set(crew.position.x,.143,crew.position.z);
     ring.visible = Boolean(selected) && state.status !== 'finished';
     if (selected) {
@@ -487,6 +502,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
         kind:target.kind||'safety',distance:Math.hypot((target.x||0)-player.x,target.z-player.z),
         near:target.id===(typeof state.near==='string'?state.near:state.near?.id),selected:target.id===selected?.id};
     });
+    if(colleagueState.taskId&&!colleagueState.settled&&(!decisionTask))labels.push({id:'coworker',text:`同事 · ${COWORKER_PHASE_LABELS[colleagueState.phase]}`,...projectGamePoint(camera,{x:colleagueState.x,y:2.05,z:colleagueState.z},sizeWidth,sizeHeight),kind:'detail',near:false,selected:false});
     const bagTask = tasks.find(t => t.id === 'bag'), bagRecord = records.get('bag');
     if (bagTask && bagRecord && !bagTask.done && selected?.id === 'bag') {
       for (const [index,b] of bagRecord.bins.entries()) {

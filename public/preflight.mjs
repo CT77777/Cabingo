@@ -43,7 +43,8 @@ function actionSteps(a) {
   return [tap(id==='ask'?'向同事確認消息':'查看資訊板'),tap('向旅客回覆')];
 }
 function beginAction(s, action) { s.action={...action,id:++s.actionSerial};
- if(s.handsOn&&action.kind!=='correction')s.action.interaction={steps:actionSteps(action),index:0,held:false,fill:0,retry:false};emit(s,"action-start",action.taskId,{choiceId:action.choice?.id,kind:action.kind}); }
+ if(s.contextual&&action.kind!=='correction')s.action.duration=action.kind==='clear-hazard'||action.taskId==='bag'&&action.choice?.id!=='check'?2:action.choice?.id==='check'||action.kind==='wait'?.8:action.kind==='handoff'||action.taskId==='question'?1:1.5;
+ if(s.handsOn&&!s.contextual&&action.kind!=='correction')s.action.interaction={steps:actionSteps(action),index:0,held:false,fill:0,retry:false};emit(s,"action-start",action.taskId,{choiceId:action.choice?.id,kind:action.kind}); }
 const EPSILON = 1e-9;
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 function rng(seed) {
@@ -69,7 +70,7 @@ function showLesson(s, id) {
 }
 
 export function createState(options = {}) {
-  let { seed = 1701, practice = false, handsOn = false } = options && typeof options === 'object' ? options : {};
+  let { seed = 1701, practice = false, handsOn = false, contextual = false } = options && typeof options === 'object' ? options : {};
   seed = Number.isFinite(seed) ? seed >>> 0 : 1701;
   const random = rng(seed), rows = shuffle([0, 1, 2, 3, 4, 5], random);
   const tasks = DEFINITIONS.map((d, i) => {
@@ -84,7 +85,7 @@ export function createState(options = {}) {
   });
   const s = {
     runId: `run-${++runSerial}`, eventSeq:0, events:[], actionSerial:0,
-    chapter: 1, seed, handsOn: !!handsOn, practice: !!practice, status: 'briefing', elapsed: 0, duration: 100,
+    chapter: 1, seed, handsOn: !!handsOn, contextual: !!contextual, practice: !!practice, status: 'briefing', elapsed: 0, duration: 100,
     cameraMode: 'follow', reducedMotion: false,
     player: { x: 0, z: 1.5, angle: 0, walking: false, step: 0 },
     tasks, hazards: [], hazardsCleared: 0, handoffTokens: 1, handoffJob: null,
@@ -230,10 +231,11 @@ function choicesFor(s, t) {
     const funny=choices.find(c=>c.id===(t.id==='question'?'ask':'wait'));
     funny.label=t.id==='water'?'我去請水杯出場，請稍等':t.id==='blanket'?'我去叫毯子起床，請稍等':'我去問問消息有沒有睡醒';funny.humorous=true;
   }
-  if(s.handsOn)for(const c of choices){
+  if(s.handsOn&&!s.contextual)for(const c of choices){
     const steps=actionSteps({kind:c.handoff?'handoff':c.ack?'wait':'task',taskId:t.id,choice:c});
     c.tags=[`${steps.length} 步操作`,...c.tags.filter(tag=>!/^\d+秒$/.test(tag))];
   }
+  if(s.contextual)for(const c of choices)c.tags=c.tags.filter(tag=>!/^\d+秒$/.test(tag));
   t.quote = quote; t.description = description;
   return { handoffHint: choices.some(c=>c.handoff) ? '每輪限 1 次。確認交接後，同事再過 12 秒送達；期間可繼續巡艙，服務回饋較少。' : null, id: t.id, title: t.title, quote, description, choices: shuffle(choices, rng(s.seed + s.decisionSerial++ * 97)) };
 }

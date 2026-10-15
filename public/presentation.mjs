@@ -42,3 +42,24 @@ export function crossedMilestones({actionId,taskId,choiceId,from,to}) {
   const threshold=taskId==='belt'?.78:taskId==='water'?.75:taskId==='bag'||taskId==='tray'?.95:null;
   return threshold!==null&&from<threshold&&to>=threshold?[{id:`${actionId}:${taskId}`,type:taskId==='water'?'cup':taskId==='belt'?'buckle':'close'}]:[];
 }
+
+export const COWORKER_PHASE_LABELS=Object.freeze({idle:'待命',preparing:'準備物品',walking:'前往旅客',serving:'正在交付',complete:'已送達',returning:'已送達 · 返回工作位'});
+
+// One shared timeline drives the colleague, prop transfer and handoff HUD.
+export function coworkerPresentation(state={}) {
+  const tasks=state.tasks||[],job=state.handoffJob;
+  const task=job?tasks.find(t=>t.id===job.taskId):tasks.find(t=>t.handoff&&t.done);
+  const home={x:.53,z:.7};
+  if(!task)return {...home,phase:'idle',progress:0,taskId:null,carrying:false,transfer:0,walking:false};
+  const active=!!job,p=active?clamp((12-job.remaining)/12):1,age=active?0:Math.max(0,(state.elapsed||0)-(task.completedAt||0));
+  const side=task.side==='right'?1:-1,dest={x:side*.53,z:task.z-.6};
+  let phase,x=home.x,z=home.z,walking=false,carrying=false,transfer=0;
+  if(active&&p<1/6){phase='preparing';carrying=p>.07;}
+  else if(active&&p<2/3){phase='walking';const q=smooth((p-1/6)/.5);z=home.z+(dest.z-home.z)*q;walking=true;carrying=true;}
+  else if(active){phase='serving';const q=smooth((p-2/3)*3);x=home.x+(dest.x-home.x)*q;z=dest.z;transfer=smooth((p-.86)/.14);carrying=true;}
+  else if(age<2){phase='complete';x=dest.x;z=dest.z;}
+  else if(age<8){phase='returning';const q=smooth((age-2)/6);x=dest.x+(home.x-dest.x)*q;z=dest.z+(home.z-dest.z)*q;walking=true;}
+  else phase='complete';
+  const angle=phase==='serving'||phase==='complete'&&z>.8?Math.atan2(side*1.25-x,.6):phase==='returning'?Math.PI:0;
+  return {x,z,angle,carryX:x+Math.sin(angle)*.38,carryZ:z+Math.cos(angle)*.38,settled:!active&&age>=8,phase,progress:p,taskId:task.id,carrying,transfer,walking,remaining:active?Math.ceil(job.remaining):0,side};
+}
