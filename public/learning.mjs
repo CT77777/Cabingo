@@ -1,5 +1,5 @@
-import {summarizeResult} from './results.mjs?v=0.7.1';
-import {KNOWLEDGE,cardsForTask} from './knowledge/index.mjs?v=0.7.1';
+import {summarizeResult} from './results.mjs?v=0.7.2';
+import {KNOWLEDGE,cardsForTask} from './knowledge/index.mjs?v=0.7.2';
 export const CODEX_STORAGE_KEY='cabin3d-codex-v1';
 const object=x=>x&&typeof x==='object'&&!Array.isArray(x);
 // Content can grow without a schema bump: retain bounded, well-formed unknown IDs.

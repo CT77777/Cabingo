@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import {createState,start,tick,interact,choose,closeDialog,pause,resume,canStand,chapterReady,targets,ackRecovery} from '../public/preflight.mjs';
-import {boardingEvidence,boardingPassable,boardingTaskActor,boardingTaskComplete} from '../public/boarding.mjs';
+import {awardChapterCards,parseCodex} from '../public/learning.mjs';
+import {createState,start,tick,interact,choose,closeDialog,pause,resume,canStand,chapterReady,targets,ackRecovery,dismissLesson} from '../public/preflight.mjs';
+import {boardingEvidence,boardingPassable,boardingTaskActor,boardingTaskComplete,inspectBoardingClue} from '../public/boarding.mjs';
 const copy=x=>JSON.parse(JSON.stringify(x));
-function create(seed=7,practice=false){const s=createState({chapterId:'boarding',seed,contextual:true,practice});start(s);return s;}
+function create(seed=7,practice=false,guidedBoarding=false){const s=createState({guidedBoarding,chapterId:'boarding',seed,contextual:true,practice});start(s);if(s.lesson?.id==='boardingWelcome')dismissLesson(s);return s;}
 const steps=(s,n)=>{for(let i=0;i<n;i++)tick(s,.1);};
 function walk(s,z,goalX=0){
  for(let i=0;i<600&&Math.hypot(s.player.x-goalX,s.player.z-z)>1.02;i++){
@@ -14,11 +15,11 @@ function walk(s,z,goalX=0){
    for(const [dx,dz] of [[0,.1],[0,-.1],[.1,0],[-.1,0]]){const x=n.x+dx,zz=n.z+dz;if(Math.abs(x)>2.75||!canStand(s,x,zz))continue;queue.push({x,z:zz,path:[...n.path,{x:dx,z:dz}]});}
   }
   if(!route?.length){if(escape?.path.length)route=escape.path;else{tick(s,.1);assert.notEqual(s.status,'finished','traffic must clear before deadline');continue;}}
-  tick(s,.1/2.35,route[0]);assert.notEqual(s.status,'finished','route deadline');
+  tick(s,.1/2.35,route[0]);if(s.lesson?.id==='boardingReady')return;assert.notEqual(s.status,'finished','route deadline');
  }
  assert(Math.hypot(s.player.x-goalX,s.player.z-z)<=1.02,`walk to ${z}, seed ${s.seed} at ${JSON.stringify(s.player)}`);
 }
-function complete(s,id){const t=s.tasks.find(t=>t.id===id);if(id==='seat'&&!s.boarding.formal)walk(s,9,.5);for(let i=0;i<250&&!targets(s).some(x=>x.id===id);i++)tick(s,.1);let opened=false;for(let attempt=0;attempt<20&&!opened;attempt++){const target=targets(s).find(x=>x.id===id);walk(s,target?.z??t.z,target?.x??0);opened=interact(s)&&s.dialog?.id===id;}assert(opened,`${id} opens`);assert.equal(s.dialog?.id,id);const good=s.dialog.choices.findIndex(c=>c.good);assert.equal(s.dialog.choices.filter(c=>c.good).length,1);choose(s,good);steps(s,25);assert(t.done,`${id} done`);}
+function complete(s,id){const t=s.tasks.find(t=>t.id===id);if(id==='seat'&&!s.boarding.formal){walk(s,9,.5);if(s.lesson?.id==='boardingReady')dismissLesson(s);}for(let i=0;i<250&&!targets(s).some(x=>x.id===id);i++)tick(s,.1);let opened=false;for(let attempt=0;attempt<20&&!opened;attempt++){const target=targets(s).find(x=>x.id===id);walk(s,target?.z??t.z,target?.x??0);opened=interact(s)&&s.dialog?.id===id;}assert(opened,`${id} opens seed${s.seed}: ${JSON.stringify({player:s.player,lesson:s.lesson,formal:s.boarding.formal,actors:s.boarding.actors})}`);assert.equal(s.dialog?.id,id);if(id==='guide'&&s.boarding.coach){inspectBoardingClue(s,'pass');inspectBoardingClue(s,'map');}const good=s.dialog.choices.findIndex(c=>c.good);assert.equal(s.dialog.choices.filter(c=>c.good).length,1);choose(s,good);steps(s,25);assert(t.done,`${id} done`);}
 const s=create();assert.equal(s.duration,90);assert.equal(s.handoffTokens,0);assert.equal(s.boarding.tutorialStep,0);steps(s,350);assert.equal(s.elapsed,0);assert.equal(s.safetyErrors,0);assert.equal(s.boarding.congestionEvents,0);assert(s.tasks.filter(t=>t.active&&!t.done).length<=3);
 for(const stop of [pause,x=>{x.dialog={id:'guide'};},x=>{x.lesson={id:'test'};}]){const a=create();steps(a,10);stop(a);const before=copy(a);steps(a,30);assert.deepEqual(copy(a),before,'all actor/congestion clocks freeze');}
 for(let seed=0;seed<30;seed++){
@@ -55,3 +56,7 @@ const edge=create(7);edge.boarding.tutorialStep=3;edge.player.x=.55;edge.player.
 const retreat=create(7);for(const a of retreat.boarding.actors)a.status='seated';const lead=retreat.boarding.actors.find(a=>a.id==='seat-owner'),tail=retreat.boarding.actors.find(a=>a.id==='seat-misread');Object.assign(lead,{x:-.28,z:1.5,status:'walking',hold:true});Object.assign(tail,{x:.52,z:1.2,status:'walking',hold:true});retreat.player.x=.2;retreat.player.z=.9;tick(retreat,.1);assert(tail.z<=1.2,'retreat cannot bypass FIFO by advancing toward an earlier traveler');assert(lead.z>1.5);
 const deadline=create();deadline.boarding.formal=true;deadline.elapsed=89.95;deadline.action={kind:'task',taskId:'seat',time:1.49,duration:1.5,choice:{}};tick(deadline,.1);assert.equal(deadline.endReason,'timeout');assert(!deadline.tasks.find(t=>t.id==='seat').done);
 console.log('PASS boarding tutorial, full walking routes, paused traffic, three seat variants, congestion hysteresis, collisions, reduced motion and deadline');
+
+let guidedMaxTime=0;for(let seed=0;seed<12;seed++){const r=create(seed,false,true);complete(r,'guide');complete(r,'bag');assert(!r.boarding.formal);complete(r,'seat');complete(r,'family');walk(r,1.5);for(let i=0;i<300&&!chapterReady(r);i++)tick(r,.1);assert(chapterReady(r),`guided boarding seed${seed}`);interact(r);assert.equal(r.endReason,'complete');assert.equal(r.grade,'clean');assert.equal(awardChapterCards(parseCodex(null),r).unlockedIds.length,4,'guided formal completion awards four boarding cards');assert(r.judgments.every(j=>j.context.trim()),'all guided review records retain context');guidedMaxTime=Math.max(guidedMaxTime,r.elapsed);assert(r.elapsed<=80,'guided route leaves time to spare');}
+console.log('Guided route maximum time:',guidedMaxTime.toFixed(2));
+console.log('PASS guided boarding full walking routes, evidence inspection, briefing, formal completion and report');

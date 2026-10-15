@@ -1,5 +1,6 @@
-import {initBoarding,tickBoarding,boardingChoices,boardingPassable,boardingTaskComplete,boardingReady,boardingTaskActor} from './boarding.mjs?v=0.7.1';
-import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=0.7.1';
+import {initBoarding,tickBoarding,boardingChoices,boardingPassable,boardingTaskComplete,boardingReady,boardingTaskActor} from './boarding.mjs?v=0.7.2';
+import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=0.7.2';
+
 // Pure, deterministic preflight game state. This is a fictional game,
 // not aviation training or a representation of real operating procedures.
 export const WORLD = Object.freeze({
@@ -88,7 +89,7 @@ export function createState(options = {}) {
     feedbackKind: 'normal', near: null, completed: 0, grade: null, result: null,
     endReason: null, reportAttempted: false
   };
-  if(chapterId==='boarding')initBoarding(s);
+  if(chapterId==='boarding'){initBoarding(s);if(options.guidedBoarding&&contextual)s.boarding.coach={examined:[],briefed:false,ready:false};}
   updateNear(s);
   return s;
 }
@@ -99,6 +100,7 @@ export function start(s) {
   for(const t of s.tasks)if(t.active&&t.kind==='service')emit(s,'demand',t.id);
   updateNear(s);
   if(s.contextual&&!s.boarding)showLesson(s,'serviceIntro');
+  if(s.boarding?.coach)showLesson(s,'boardingWelcome');
   return true;
 }
 export function counts(s) {
@@ -263,6 +265,7 @@ export function choose(s, index) {
   if (s.status !== 'playing' || !s.dialog || s.lesson || s.recovery || s.action || !Number.isInteger(index)) return false;
   const t = s.tasks.find(t => t.id === s.dialog.id), choice = s.dialog.choices[index];
   if (!t || !choice) return false;
+  if(t.id==='guide'&&s.boarding?.coach&&s.boarding.coach.examined.length<2)return false;
   if(choice.leave){s.dialog=null;s.player.walking=false;feedback(s,'先處理走道行李，再回來完成服務。');return true;}
   let judgment=s.judgments.find(j=>j.taskId===t.id);
   if(!judgment){judgment={taskId:t.id,title:t.title,variant:t.variant,context:s.dialog.description,attempts:0,incorrect:0};s.judgments.push(judgment);}
@@ -294,6 +297,7 @@ export function choose(s, index) {
     beginAction(s, { kind: 'correction', taskId: t.id, time: 0, duration: 2, choice });
     feedback(s, choice.feedback, 'warning'); showLesson(s, 'correction');
   } else {
+    if(!choice.ack&&!choice.handoff)emit(s,'correct',t.id);
     beginAction(s, { kind: choice.handoff ? 'handoff' : choice.ack ? 'wait' : 'task', taskId: t.id, time: 0, duration: choice.duration, choice });
     feedback(s, t.kind === 'safety' ? '依眼前情境完成確認…' : choice.handoff ? '聯繫同事交接，完成後仍需等候送達…' : choice.ack ? '正在說明等候安排…' : '正在協助旅客…');
   }
@@ -324,7 +328,8 @@ export function actionInput(s,input){
 }
 export function dismissLesson(s) {
   if (!s.lesson || s.status !== 'playing') return false;
-  if (!s.lessonSeen.includes(s.lesson.id)) s.lessonSeen.push(s.lesson.id);
+  if (!['boardingWelcome','boardingReady'].includes(s.lesson.id)&&!s.lessonSeen.includes(s.lesson.id)) s.lessonSeen.push(s.lesson.id);
+  if(s.lesson.id==='boardingReady'&&s.boarding?.coach){s.boarding.coach.briefed=true;s.boarding.time=0;s.boarding.formal=true;s.boarding.tutorialStep=4;for(const t of s.tasks)if(!t.done)t.spawn=s.elapsed;}
   s.lesson = null; return true;
 }
 export function pause(s) {
@@ -421,7 +426,7 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
   for (const h of s.hazards) {
     if (h.collisionPending && !rectBlocked(s.player.x, s.player.z, -.38, .38, h.z - .34, h.z + .34)) h.collisionPending = false;
   }
-  if(s.boarding)tickBoarding(s,dt);
+  if(s.boarding){tickBoarding(s,dt);if(s.boarding.coach?.ready&&!s.boarding.coach.briefed)showLesson(s,'boardingReady');}
   updateNear(s);
 }
 

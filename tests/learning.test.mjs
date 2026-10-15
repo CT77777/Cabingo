@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {boardingChoices} from '../public/boarding.mjs';
 import {CHAPTERS} from '../public/chapters/index.mjs';
 import {createState,start,interact,choose,dismissLesson,ackRecovery,tick,readEvents} from '../public/preflight.mjs';
 import {KNOWLEDGE,cardsForTask} from '../public/knowledge/index.mjs';
@@ -29,7 +30,7 @@ assert.equal(prepareCodexSave('{"version":2,"future":true}',codex).raw,null);
 assert.deepEqual(parseCodex('{"version":2,"future":true}'),{version:1,unlockedIds:[]});
 const changed=createState({contextual:true,practice:true,seed:1});start(changed);dismissLesson(changed);const bag=changed.tasks.find(t=>t.id==='bag'),water=changed.tasks.find(t=>t.id==='water');bag.variant=0;changed.player.z=water.z-.8;interact(changed);assert.equal(changed.dialog.id,'water');choose(changed,changed.dialog.choices.findIndex(c=>c.id==='wait'));for(let i=0;i<40;i++)tick(changed,.1);bag.done=true;interact(changed);assert.equal(changed.dialog.id,'water');const currentContext=changed.dialog.description;choose(changed,changed.dialog.choices.findIndex(c=>c.id==='serve'));assert.equal(changed.judgments[0].context,currentContext);assert(currentContext.includes('行李已清除'));
 const contentFuture=parseCodex('{"version":1,"unlockedIds":["newer-card","seat-belt","<bad>",null]}');assert(contentFuture.unlockedIds.includes('newer-card'));assert(!contentFuture.unlockedIds.includes('<bad>'));assert(prepareCodexSave(JSON.stringify(contentFuture),codex).raw.includes('newer-card'));
-const tutorial=createState({chapterId:'boarding',contextual:true});start(tutorial);tutorial.player.z=2.2;interact(tutorial);choose(tutorial,tutorial.dialog.choices.findIndex(c=>!c.good));assert.equal(tutorial.judgments[0].incorrect,1);assert.equal(tutorial.judgments[0].mode,'tutorial');assert.equal(tutorial.mistakes,0);assert.equal(tutorial.elapsed,0);
+const tutorial=createState({chapterId:'boarding',contextual:true});start(tutorial);tutorial.player.z=2.2;interact(tutorial);choose(tutorial,tutorial.dialog.choices.findIndex(c=>!c.good));assert.equal(tutorial.judgments[0].incorrect,1);assert.equal(tutorial.judgments[0].mode,'tutorial');assert.equal(tutorial.mistakes,0);assert.equal(tutorial.elapsed,0);assert(tutorial.judgments[0].context.trim(),'boarding review preserves observed context');for(const id of ['guide','seat','family'])assert(boardingChoices(tutorial,tutorial.tasks.find(t=>t.id===id)).description.trim(),`${id} retains review context`);
 const won={chapterId:'preflight',status:'finished',endReason:'complete',grade:'clean',practice:false,safetyErrors:0,mistakes:0,comfort:100,tasks:[{id:'belt',done:true},{id:'tray',done:false},{id:'water',done:true}]};
 const empty=parseCodex(null),earned=awardChapterCards(empty,won);assert.deepEqual(earned.unlockedIds,['seat-belt','water-service']);assert.equal(newlyEarnedCards(empty,earned).length,2);assert.equal(newlyEarnedCards(earned,awardChapterCards(earned,won)).length,0);
 for(const patch of [{practice:true},{status:'playing'},{endReason:'timeout'},{safetyErrors:2},{grade:'incomplete'}])assert.deepEqual(awardChapterCards(empty,{...won,...patch}),empty);
