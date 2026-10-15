@@ -330,3 +330,46 @@ body[data-panel=decision][data-decision-kind=safety] .scene-badge { display:none
  .score-row b { font-size:11px; }
  .task-details { padding:3px 8px; }
 }
+
+/* One instrument for sound: speaker toggles mute, the track sets volume. */
+.game-surface { display:contents; }
+.volume-control { gap:0; padding:0 10px 0 0; height:44px; min-height:44px; border:1px solid #b4d8cb44; background:#102b3ae8; border-radius:8px; }
+.speaker-button { display:grid; place-items:center; width:44px; height:42px; padding:0; border:0; border-radius:7px; color:#a8dfcb; background:transparent; }
+.speaker-button svg { fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.speaker-button:hover { background:#a8dfcb18; }
+.volume-control[data-muted=true] .speaker-button { color:#c9d4d4; }
+#volumeSlider { appearance:none; -webkit-appearance:none; width:70px; min-height:42px; height:42px; border-radius:4px; margin:0; cursor:pointer; background-size:100% 4px; background-position:center; background-repeat:no-repeat; }
+#volumeSlider::-webkit-slider-runnable-track { height:4px; background:transparent; }
+#volumeSlider::-moz-range-track { height:4px; background:transparent; }
+#volumeSlider::-webkit-slider-thumb { margin-top:-4px; appearance:none; -webkit-appearance:none; width:12px; height:12px; background:#d8f2df; border:0; border-radius:50%; box-shadow:0 0 0 4px #a8dfcb10; }
+#volumeSlider::-moz-range-thumb { width:12px; height:12px; background:#d8f2df; border:0; border-radius:50%; }
+#volumeSlider:focus-visible { outline:2px solid var(--gold); outline-offset:8px; }
+.info-button { display:grid; place-items:center; }
+.info-button span { display:grid; place-items:center; width:19px; height:19px; border:1.5px solid currentColor; border-radius:50%; font:bold 14px Georgia,serif; }
+.away-overlay { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left)); overflow:auto; background:#081c2ab8; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); pointer-events:auto; }
+.away-card { width:min(100%,360px); max-height:100%; overflow:auto; padding:32px 26px; border:1px solid #c0dfce38; border-radius:16px; background:#173440f2; box-shadow:0 20px 70px #06131c55; text-align:center; }
+.away-symbol { display:grid; place-items:center; margin:0 auto 18px; width:48px; height:48px; border:1px solid #b7dfcc55; border-radius:50%; color:var(--mint); font-size:24px; }
+.away-card h2 { font-size:25px; margin:12px 0; }
+.away-card p { color:#c9dad1; font-size:13px; line-height:1.8; margin:0 0 24px; }
+.away-card button { width:100%; min-height:46px; }
+.away-card small { margin-top:12px; }
+#rulesPanel { margin-bottom:16px; }
+@media (max-width:700px) {
+ .volume-control { font-size:inherit; padding:0 8px 0 0; }
+ .speaker-button { width:44px; }
+ #volumeSlider { width:48px; }
+ #cameraButton { width:44px; max-width:44px; font-size:0; }
+ #cameraButton:after { content:"鏡頭"; font-size:10px; }
+ nav>button { min-width:44px; }
+ .away-card { padding:24px 20px; }
+}
+@media (max-height:420px) { .away-symbol { display:none; } .away-card { padding:16px 20px; } .away-card p { margin-bottom:12px; } }
+
+@media (max-width:360px) { #volumeSlider { width:40px; } .volume-control { padding-right:6px; } }
+
+.volume-control[data-muted=true] #volumeWaves { display:none; }
+.volume-control[data-muted=false] #muteSlash { display:none; }
+@media (max-width:700px) {
+ #cameraButton:after { content:'跟隨'; }
+ #cameraButton[aria-pressed=true]:after { content:'總覽'; }
+}

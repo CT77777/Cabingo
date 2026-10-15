@@ -191,6 +191,10 @@ def main():
     start_card=root.xpath('//div[@class="start-card"]')[0];rules_node=root.xpath('//div[@class="rules"]')[0]
     description=by_id('decisionDescription');decision=by_id('decisionCard')
     reading_ids=['decisionCard','lessonCard','pauseCard','resultCard']
+    away=by_id('awayOverlay')
+    check('Focus pause is a modal outside the inert game surface',away.get('role')=='dialog' and away.get('aria-modal')=='true' and by_id('gameSurface') not in away.iterancestors())
+    check('Focus pause covers the whole viewport above every HUD',computed(away,1512,801,False).get('position')=='fixed' and computed(away,1512,801,False).get('inset')=='0' and int(computed(away,1512,801,False).get('z-index','0'))>20)
+    check('Sound controls share one accessible group',by_id('muteButton').getparent() is by_id('volumeSlider').getparent() and by_id('volumeControl').get('role')=='group')
     check('Canvas has keyboard focus and explicit screen-relative instructions',canvas.get('tabindex')=='0' and '螢幕' in canvas.get('aria-label',''))
     check('Scene, movement controls and guidance retain separate DOM ownership',list(panel)==[stage,dock,guidance])
     check('Reading surfaces share a separate drawer outside the scene',all(by_id(i).getparent() is aside for i in reading_ids) and aside.getparent() is workspace)
