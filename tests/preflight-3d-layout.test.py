@@ -210,6 +210,11 @@ def main():
     check('Viewport enables safe-area-aware edge HUD',root.xpath('//meta[@name="viewport"]')[0].get('content','').find('viewport-fit=cover')>=0 and all('safe-area-inset-'+side in CSS for side in ['top','right','bottom','left']))
     check('Full-height shell declares both vh fallback and dynamic dvh height',bool(re.search(r'\.shell\s*\{[^}]*height:\s*100vh;[^}]*height:\s*100dvh;',CSS)))
     check('CSS hidden state cannot be undone by card display rules',any(selector=='[hidden]' and declarations.get('display')=='none!important' for selector,declarations,media in rules))
+    for compact_width in [701,850,1194,1512]:
+        body.set('data-panel','idle')
+        compact=computed(dock,compact_width,959,False)
+        check(f'{compact_width}px fine pointer uses compact action without movement legend',compact.get('width')=='min(240px, var(--play-hud-width))' and computed(root.xpath('//div[@class="key-help"]')[0],compact_width,959,False).get('display')=='none' and computed(root.xpath('//div[@class="touch-pad"]')[0],compact_width,959,False).get('display')=='none')
+    check('Tablet touch keeps full direction controls',computed(root.xpath('//div[@class="touch-pad"]')[0],1194,959,True).get('display')=='grid' and computed(dock,1194,959,True).get('width')=='var(--play-hud-width)')
     # Generated-label fixtures model only DOM structure, not gameplay or layout.
     by_id('choices').append(html.fragment_fromstring('<button class="choice"><b>1</b><span class="choice-copy"><span>請同事送水</span><span class="choice-tags"><span>同事需12秒</span></span></span></button>'))
     by_id('taskList').append(html.fragment_fromstring('<div class="task-row safety"><b>安全檢查</b><small>1B 座位</small><span>待辦</span></div>'))
@@ -262,7 +267,7 @@ def main():
         check(prefix+' start prompt is centered with local scroll when short',css(by_id('briefCard')).get('inset')=='0' and css(by_id('briefCard')).get('align-items')=='center' and css(by_id('briefCard')).get('justify-content')=='center' and css(by_id('briefCard')).get('overflow')=='auto' and css(start_card).get('overflow')=='auto' and css(start_card).get('max-height')=='100%')
         check(prefix+' rules are independently bounded and scrollable',css(rules_node).get('overflow')=='auto' and 0<size(css(rules_node)['max-height'],rules_node)<=height*.5)
         touch=root.xpath('//div[@class="touch-pad"]')[0]
-        if coarse or width<=1100:
+        if coarse or width<=700:
             check(prefix+' visible touch controls retain accessible pointer targets',css(touch).get('display')=='grid' and all(b.get('aria-label') and css(b).get('touch-action')=='none' and size(css(b)['min-height'],b)>=44 for b in touch))
         for mode,ident in [('decision','decisionCard'),('lesson','lessonCard'),('pause','pauseCard'),('result','resultCard')]:
             body.set('data-panel',mode);as_=css(aside);card=by_id(ident)

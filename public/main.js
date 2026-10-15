@@ -1,7 +1,7 @@
-import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents,actionInput} from './preflight.mjs?v=0.4.1';
-import {layoutLabels,crossedMilestones} from './presentation.mjs?v=0.4.1';
-import {createCabinAudio} from './audio.mjs?v=0.4.1';
-import {summarizeResult,parseBest,selectBest} from './results.mjs?v=0.4.1';
+import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents,actionInput} from './preflight.mjs?v=0.4.2';
+import {layoutLabels,crossedMilestones} from './presentation.mjs?v=0.4.2';
+import {createCabinAudio} from './audio.mjs?v=0.4.2';
+import {summarizeResult,parseBest,selectBest} from './results.mjs?v=0.4.2';
 const $=id=>document.getElementById(id),canvas=$('sceneCanvas');
 const resumeBlockedKeys=new Set(),keys=new Set(),touch=new Set(),held=new Set(),choiceBlockedKeys=new Set(),labelElements=new Map();
 const motion=matchMedia('(prefers-reduced-motion: reduce)'),phone=matchMedia('(max-width: 700px)');
@@ -152,5 +152,5 @@ function updateLabels(labels){
  }for(const [id,e] of labelElements)if(!active.has(id))e.hidden=true;
 }
 function frame(time){const dt=Math.min(Math.max((time-last)/1000,0),.05);last=time;if(ready&&view){const wasAction=state.action,heldDir=d=>keys.has(d)||touch.has(d);tick(state,dt,screenInputToWorld(Number(heldDir('right'))-Number(heldDir('left')),Number(heldDir('up'))-Number(heldDir('down'))));if(wasAction&&!state.action)clearMovement();state.renderTargets=targets(state);try{const visual=view.render(state,dt);updateLabels(visual?.labels||[]);}catch(error){fail(error);}if(ready){syncPresentation();if(state.action){$('actionBar').style.width=`${100*state.action.time/state.action.duration}%`;if(state.action.interaction)$('holdFill').style.width=`${Math.min(100,state.action.interaction.fill/1.2*100)}%`;}refresh();}}requestAnimationFrame(frame);}
-async function boot(){try{const {createCabinView}=await import('./scene.js?v=0.4.1');view=createCabinView(canvas,{onContextLost:()=>fail(new Error('WebGL context lost'))});ready=true;hide('loading',true);$('startButton').disabled=false;$('practiceButton').disabled=false;text('startButton','開始正式巡艙 →');refresh(true);requestAnimationFrame(frame);}catch(error){fail(error);}}
+async function boot(){try{const {createCabinView}=await import('./scene.js?v=0.4.2');view=createCabinView(canvas,{onContextLost:()=>fail(new Error('WebGL context lost'))});ready=true;hide('loading',true);$('startButton').disabled=false;$('practiceButton').disabled=false;text('startButton','開始正式巡艙 →');refresh(true);requestAnimationFrame(frame);}catch(error){fail(error);}}
 refresh(true);boot();

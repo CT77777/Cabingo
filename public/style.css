@@ -373,3 +373,12 @@ body[data-panel=decision][data-decision-kind=safety] .scene-badge { display:none
  #cameraButton:after { content:'跟隨'; }
  #cameraButton[aria-pressed=true]:after { content:'總覽'; }
 }
+
+/* Desktop keeps only the action; movement instructions live behind ⓘ. */
+@media (min-width:701px) and (pointer:fine) {
+ :root { --dock-height:48px; }
+ .control-dock { width:min(240px, var(--play-hud-width)); padding:0; gap:0; border:0; background:transparent; }
+ .control-dock .key-help, .control-dock .touch-pad { display:none; }
+ .control-dock .interact { width:100%; min-height:44px; justify-content:flex-start; padding:10px 14px; }
+ .control-dock .interact>b { display:grid; }
+}
