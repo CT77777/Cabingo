@@ -1,6 +1,6 @@
 import {boardingTaskActor,boardingEvidence} from './boarding.mjs?v=0.7.1';
 import * as THREE from './vendor/three.module.min.js';
-import {passengerPose,actionPose,serviceItemPose,GALLEY_SUPPLY,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.7.1';
+import {passengerPose,actionPose,serviceItemPose,trolleyPresentation,GALLEY_SUPPLY,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.7.1';
 
 // Gameplay and scene share x/z coordinates. Both cameras face +z along the
 // centreline, so screen-right input is world -x, and screen-up is world +z.
@@ -361,13 +361,15 @@ export function createCabinView(canvas, { onContextLost } = {}) {
         const g = group(); g.name = `standing-${hazard.id}`;
         const sourceTask=lastTasks.find(t=>t.id===hazard.taskId);
         const row=sourceTask?.row||0,i=sourceTask?.side==='right'?2:1;
-        passenger(g,0,0,shirts[(row+i)%6],['skinA','skinB','skinC'][(row+i)%3],i%2?'deep':'hair',(row+i)%4,true);
+        const actor=passenger(g,0,0,shirts[(row+i)%6],['skinA','skinB','skinC'][(row+i)%3],i%2?'deep':'hair',(row+i)%4,true);
         // An actual standing body, not just a warning marker, obstructs the aisle.
-        r = {group:g}; hazardRecords.set(hazard.id,r);
+        r = {group:g,actor}; hazardRecords.set(hazard.id,r);
       }
       r.group.position.set(hazard.x || 0,.02,hazard.z || 3); r.group.visible = !hazard.done;
     }
   }
+  const escortBeacon=new THREE.Mesh(ownGeometry(new THREE.RingGeometry(.18,.24,48)),ownMaterial(new THREE.MeshBasicMaterial({color:'#9be4cf',side:THREE.DoubleSide,transparent:true,opacity:.95,depthWrite:false})));
+  escortBeacon.name='escort-beacon';escortBeacon.rotation.x=-Math.PI/2;escortBeacon.visible=false;scene.add(escortBeacon);
   const floorBag = new THREE.Vector3(), liftedBag = new THREE.Vector3(), entryBag = new THREE.Vector3(), stowedBag = new THREE.Vector3();
   function updateTask(record, task, state, selectedId) {
     const activeAction = state.action?.taskId === task.id && ['task','stow'].includes(state.action.kind);
@@ -404,7 +406,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       const self=activeAction&&state.action.choice?.id==='serve';
       const colleagueState=coworkerPresentation(state),delegated=colleagueState.taskId===task.id&&colleagueState.phase==='serving';
       const hand={x:state.player.x+.22,y:1.13,z:state.player.z+.18},dest={x:record.x,y:1.04,z:record.z-.35};
-      const selfPose=serviceItemPose({source:{x:.5,y:1.16,z:state.player.z-.6},hand,dest,progress:p});
+      const selfPose=serviceItemPose({source:{...trolleyPresentation(state.player),y:1.16},hand,dest,progress:p});
       const activeJob=colleagueState.taskId===task.id&&!!state.handoffJob;
       record.delivery.visible=task.done||self||activeJob;
       if(task.done)record.delivery.position.set(dest.x,dest.y,dest.z);
@@ -453,7 +455,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       const actor=!state.boarding&&task?.characterId==='elder'?returningElder:baseActor;
       if(actor!==baseActor){baseActor.root.visible=false;actor.root.position.copy(baseActor.root.position);}
       const hazard=task&&hazards.find(h=>h.taskId===task.id&&!h.done);
-      actor.root.visible=!hazard&&(!state.boarding||i===0||i===3);
+      const returning=task&&hazards.find(h=>h.taskId===task.id&&h.done&&Number.isFinite(h.returnedAt)&&state.elapsed-h.returnedAt<.6);actor.root.visible=!hazard&&!returning&&(!state.boarding||i===0||i===3);
       const selected=task&&selectedId===task.id;
       const r=task&&reactions.get(task.id), reaction=r?{type:r.type,age:visualTime-r.at}:null;
       const mood=task?.done?'happy':task?.late?'waiting':selected?'curious':Math.sin(visualTime*.35+actor.phase)>.55?'happy':actor.style===1?'curious':'neutral';
@@ -472,6 +474,15 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       if(task){const h=haloFor(task.id),completed=reaction?.type==='complete'&&reaction.age<1.4;
         h.visible=!!selected||completed;h.position.set(actor.root.position.x,1.7,actor.root.position.z);h.rotation.x=Math.PI/2;
         h.scale.setScalar(completed&&!reducedMotion?1+reaction.age*.2:1);}
+    }
+    const escort=state.action?.escort,activeHazard=hazards.find(h=>h.id===state.action?.hazardId);
+    escortBeacon.visible=!!escort&&state.status!=='finished';if(escort)escortBeacon.position.set(escort.goal.x,.16,escort.goal.z);
+    for(const h of hazards){const r=hazardRecords.get(h.id);if(!r)continue;
+      const task=tasks.find(t=>t.id===h.taskId),age=Number.isFinite(h.returnedAt)?Math.max(0,state.elapsed-h.returnedAt):Infinity;
+      if(h.done&&age<.6){const q=smooth(age/.6);r.group.visible=true;r.group.position.set((h.x||0)+((task?.side==='right'?1.25:-1.25)-(h.x||0))*q,.02-.5*q,h.z);r.actor.root.rotation.y=0;}
+      else if(!h.done){const dx=player.x-(h.x||0),dz=player.z-h.z,d=Math.hypot(dx,dz),shift=escort&&activeHazard===h?Math.min(.18,Math.max(0,d-.5)):0;
+        r.group.position.set((h.x||0)+(d?dx/d*shift:0),.02,h.z+(d?dz/d*shift:0));r.actor.root.rotation.y=Math.atan2(dx,-dz);r.actor.arms[1].rotation.x=escort&&activeHazard===h?-.6:0;r.actor.brows.forEach((b,i)=>b.rotation.z=(i?1:-1)*.22);
+      }else r.group.visible=false;
     }
     for(const pair of boardingActors.values()){pair.standing.root.visible=false;pair.seated.root.visible=false;}
     for(const a of state.boarding?.actors||[]){
@@ -510,12 +521,12 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     colleagueArms[0].rotation.x=colleagueState.carrying?-.8:-stride*.5;colleagueArms[1].rotation.x=colleagueState.carrying?-.8:stride*.5;
     colleagueCup.visible=false;
     colleagueBlanket.visible=false;
-    trolley.position.set(.5,0,player.z-.6);const selfServing=state.action?.kind==='task'&&state.action.choice?.id==='serve';
+    const cartPose=trolleyPresentation(player);trolley.position.set(cartPose.x,0,cartPose.z);trolley.rotation.y=cartPose.angle;const selfServing=state.action?.kind==='task'&&state.action.choice?.id==='serve';
     trolleyLid.rotation.x=selfServing?-1.4*serviceItemPose({source:{x:0,y:0,z:0},hand:{x:0,y:0,z:0},dest:{x:0,y:0,z:0},progress}).open:0;
     galleyLid.rotation.x=colleagueState.phase==='preparing'?-1.4*Math.sin(Math.min(1,colleagueState.progress*6)*Math.PI):0;
     if(state.action?.kind==='handoff'){crew.rotation.y=Math.atan2(GALLEY_SUPPLY.x-player.x,GALLEY_SUPPLY.z-player.z);arms[1].rotation.x=-1.9;}
     shadow.position.set(crew.position.x,.143,crew.position.z);
-    ring.visible = Boolean(selected) && state.status !== 'finished';
+    ring.visible = Boolean(selected) && state.status !== 'finished'&&!escort;
     if (selected) {
       ring.position.set(selected.x || 0,.146,selected.z);
       const near = Math.hypot((selected.x||0)-(player.x||0),selected.z-player.z) <= INTERACTION_RADIUS + 1e-8;
@@ -581,6 +592,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     }
     const speakerTask=tasks.find(t=>t.id===state.dialog?.id),speakerActor=speakerTask&&(state.boarding?boardingActors.get(boardingTaskActor(state,speakerTask.id)?.id)?.standing:speakerTask.characterId==='elder'?returningElder:passengers.get(`${speakerTask.row}-${speakerTask.side==='right'?2:1}`));
     const speaker=speakerActor?projectGamePoint(camera,{x:speakerActor.root.position.x,y:1.95,z:speakerActor.root.position.z},sizeWidth,sizeHeight):null;
+    if(escort)labels.push({id:'escort-goal',text:'走到這裡',...projectGamePoint(camera,{x:escort.goal.x,y:.35,z:escort.goal.z},sizeWidth,sizeHeight),kind:'detail',near:true,selected:true});
     return {labels,speaker,selectedId:selected?.id || null};
   }
   function dispose() {

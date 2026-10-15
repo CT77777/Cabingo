@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {CHAPTERS} from '../public/chapters/index.mjs';
-import {createState,start,interact,choose,ackRecovery,tick,readEvents} from '../public/preflight.mjs';
+import {createState,start,interact,choose,dismissLesson,ackRecovery,tick,readEvents} from '../public/preflight.mjs';
 import {KNOWLEDGE,cardsForTask} from '../public/knowledge/index.mjs';
 import {parseCodex,awardChapterCards,newlyEarnedCards,prepareCodexSave,resultJudgments,CODEX_STORAGE_KEY} from '../public/learning.mjs';
 assert.equal(CODEX_STORAGE_KEY,'cabin3d-codex-v1');assert(KNOWLEDGE.length>=8);
@@ -9,7 +9,7 @@ assert.equal(new Set(KNOWLEDGE.map(c=>c.id)).size,KNOWLEDGE.length);
 for(const c of KNOWLEDGE){assert(c.title&&c.body&&c.category&&c.collectibleTitle&&c.fact&&c.serial&&c.art);assert(c.factSources.length);for(const source of c.factSources)assert(source.label&&source.url.startsWith('https://'));assert(c.art.startsWith('./assets/cards/'));const art=fs.readFileSync(new URL('../public/'+c.art.slice(2),import.meta.url),'utf8');assert(art.includes('<svg')&&art.includes('viewBox="0 0 640 360"'));assert(!/<script|https?:\/\//i.test(art.replace('http://www.w3.org/2000/svg','')),'local art has no scripts or external resources');assert.equal(c.reviewed,false);assert(c.sources.length);for(const s of c.sources){assert(s.label);assert(/^https:\/\//.test(s.url));}assert(c.chapters.length);}
 for(const c of CHAPTERS.filter(c=>c.available))for(const t of c.tasks)for(const variant of [0,1,2])assert(cardsForTask(c.id,t.id,variant).length,`${c.id}/${t.id}/${variant}`);
 assert.deepEqual(cardsForTask('future','bag',0),[]);assert.deepEqual(cardsForTask('preflight','unknown',0),[]);
-const s=createState({contextual:true,practice:true,seed:1});start(s);
+const s=createState({contextual:true,practice:true,seed:1});start(s);dismissLesson(s);
 assert.deepEqual(s.encounters,[]);assert.deepEqual(s.judgments,[]);
 s.player.z=s.tasks.find(t=>t.id==='belt').z-.8;interact(s);assert.equal(s.dialog.id,'belt');
 assert.deepEqual(s.encounters,['belt']);assert.equal(resultJudgments(s).length,0);
@@ -27,7 +27,7 @@ codex={version:1,unlockedIds:['seat-belt']};
 const other={version:1,unlockedIds:['tray-table','tray-table','made-up']};const saved=prepareCodexSave(JSON.stringify(other),codex);assert(saved.codex.unlockedIds.includes('tray-table'));assert(saved.codex.unlockedIds.includes('seat-belt'));assert(saved.raw.includes('made-up'),'preserve newer content IDs within same schema');
 assert.equal(prepareCodexSave('{"version":2,"future":true}',codex).raw,null);
 assert.deepEqual(parseCodex('{"version":2,"future":true}'),{version:1,unlockedIds:[]});
-const changed=createState({contextual:true,practice:true,seed:1});start(changed);const bag=changed.tasks.find(t=>t.id==='bag'),water=changed.tasks.find(t=>t.id==='water');bag.variant=0;changed.player.z=water.z-.8;interact(changed);assert.equal(changed.dialog.id,'water');choose(changed,changed.dialog.choices.findIndex(c=>c.id==='wait'));for(let i=0;i<40;i++)tick(changed,.1);bag.done=true;interact(changed);assert.equal(changed.dialog.id,'water');const currentContext=changed.dialog.description;choose(changed,changed.dialog.choices.findIndex(c=>c.id==='serve'));assert.equal(changed.judgments[0].context,currentContext);assert(currentContext.includes('行李已清除'));
+const changed=createState({contextual:true,practice:true,seed:1});start(changed);dismissLesson(changed);const bag=changed.tasks.find(t=>t.id==='bag'),water=changed.tasks.find(t=>t.id==='water');bag.variant=0;changed.player.z=water.z-.8;interact(changed);assert.equal(changed.dialog.id,'water');choose(changed,changed.dialog.choices.findIndex(c=>c.id==='wait'));for(let i=0;i<40;i++)tick(changed,.1);bag.done=true;interact(changed);assert.equal(changed.dialog.id,'water');const currentContext=changed.dialog.description;choose(changed,changed.dialog.choices.findIndex(c=>c.id==='serve'));assert.equal(changed.judgments[0].context,currentContext);assert(currentContext.includes('行李已清除'));
 const contentFuture=parseCodex('{"version":1,"unlockedIds":["newer-card","seat-belt","<bad>",null]}');assert(contentFuture.unlockedIds.includes('newer-card'));assert(!contentFuture.unlockedIds.includes('<bad>'));assert(prepareCodexSave(JSON.stringify(contentFuture),codex).raw.includes('newer-card'));
 const tutorial=createState({chapterId:'boarding',contextual:true});start(tutorial);tutorial.player.z=2.2;interact(tutorial);choose(tutorial,tutorial.dialog.choices.findIndex(c=>!c.good));assert.equal(tutorial.judgments[0].incorrect,1);assert.equal(tutorial.judgments[0].mode,'tutorial');assert.equal(tutorial.mistakes,0);assert.equal(tutorial.elapsed,0);
 const won={chapterId:'preflight',status:'finished',endReason:'complete',grade:'clean',practice:false,safetyErrors:0,mistakes:0,comfort:100,tasks:[{id:'belt',done:true},{id:'tray',done:false},{id:'water',done:true}]};

@@ -5,7 +5,7 @@ const tips={label:'FAA｜Passenger Safety Tips（旅客安全原則）',url:'htt
 const tables={label:'FAA｜AC 121-24E，起降前餐桌、餐飲與行李收妥',url:'https://www.faa.gov/documentLibrary/media/Advisory_Circular/AC_121-24E.pdf'};
 const cards=[
  {id:'boarding-guide',category:'服務溝通',title:'先核對，再指引座位',body:'先對照旅客的登機資訊與椅背排號，再給簡短、明確的方向。遊戲提示：本作中 3C 代表第 3 排、機艙右側；字母與座位配置依航空公司與機型而異。',sources:[traveler],sourceNote:'來源支持行程資訊核對；座位方向與協助方式是本作的簡化設計。',chapters:['boarding']},
- {id:'stow-baggage',category:'客艙安全',title:'行李收妥，走道留空',body:'隨身物品要妥善收妥，避免滑動、掉落或擋住通道。遊戲提示：附近櫃子已滿時應協調其他可用位置；已收好的行李先查看，不必重做。',sources:[traveler],sourceNote:'來源支持行李收妥與通道淨空；各航空公司規定可能不同。',chapters:['boarding','preflight']},
+ {id:'stow-baggage',category:'客艙安全',title:'行李收妥，走道留空',body:'隨身物品要妥善收妥，避免滑動、掉落或擋住通道。遊戲提示：先確認可見櫃子的空間，有空位才放入，不擠進已滿的櫃子；已收好的行李先查看，不必重做。',sources:[traveler],sourceNote:'來源支持行李收妥與通道淨空；各航空公司規定可能不同。',chapters:['boarding','preflight']},
  {id:'boarding-pass',category:'機艙資訊',title:'同座位號，也要核對日期',body:'核對行程時，日期、班次與旅客資料都需要一致。遊戲提示：兩人都指向 4C 時，比較兩張證件的日期、排數與側別，不能只看座位號就決定。',sources:[traveler],sourceNote:'來源支持行程資訊核對；本作不是登機查驗程序教學。',chapters:['boarding']},
  {id:'family-aisle',category:'服務溝通',title:'協助入座，也顧到腳邊物品',body:'物品不應阻礙通道；協助旅客時也要留意腳邊是否仍有行李。遊戲提示：先協助收妥家長的手提袋，再讓家長入座，比只請人坐下更完整。',sources:[traveler],sourceNote:'來源支持行李與通道安全；任務中的協助順序是本作設計；卡面另提供兒童乘機的一般安全資訊，不教導固定裝置的操作程序。',chapters:['boarding']},
  {id:'seat-belt',category:'客艙安全',title:'先讓旅客理解，再確認安全帶',body:'安全帶能在亂流與關鍵飛行階段提供保護；就座時應依機上指示繫妥。遊戲提示：先觀察旅客是否有注意、是否理解圖示，以及是否已扣好，再選擇說明或查看。',sources:[safety,tips],sourceNote:'來源支持繫妥安全帶與閱讀安全提示；對話選項是簡化的溝通練習。',chapters:['preflight']},

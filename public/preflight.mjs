@@ -98,6 +98,7 @@ export function start(s) {
   s.status = 'playing';
   for(const t of s.tasks)if(t.active&&t.kind==='service')emit(s,'demand',t.id);
   updateNear(s);
+  if(s.contextual&&!s.boarding)showLesson(s,'serviceIntro');
   return true;
 }
 export function counts(s) {
@@ -162,7 +163,7 @@ export function canStand(s, x, z) {
   return true;
 }
 export function move(s, dx, dz, dt) {
-  if (s.status !== 'playing' || s.dialog || s.lesson || s.recovery || s.action || !Number.isFinite(dt) || dt <= 0) { s.player.walking = false; return false; }
+  if (s.status !== 'playing' || s.dialog || s.lesson || s.recovery || s.action&&!s.action.escort || !Number.isFinite(dt) || dt <= 0) { s.player.walking = false; return false; }
   dx = Number.isFinite(dx) ? dx : 0; dz = Number.isFinite(dz) ? dz : 0;
   if (!dx && !dz) { s.player.walking = false; return false; }
   dt = Math.min(dt, .1);
@@ -189,9 +190,9 @@ function choicesFor(s, t) {
   let quote, description, choices;
   if (t.id === 'bag') {
     quote = ['我的包可以放哪裡？', '這個包還沒放好。', '我已經放好了。'][v];
-    description = ['走道有行李，頭頂櫃還有空位。', '走道有行李，附近頭頂櫃已滿。', '行李已收妥，走道保持淨空。'][v];
-    choices = [mk('stow', '幫你放進空櫃', v === 0, 5), mk('relocate', '協調其他可用位置', v === 1, 6), mk('check', '查看已收好的行李', v === 2, 4)];
-    choices.forEach(c => { c.feedback = c.good ? repaired : ['走道有行李，頭頂櫃有空位；現在需要協助收妥。', '附近頭頂櫃已滿；需要協調畫面中的其他空位。', '行李已收妥、走道淨空；現在只需查看確認。'][v]; });
+    description = ['走道有行李，頭頂櫃還有空位。', '走道有行李；旅客上方已滿，另一側有可用空櫃。', '行李已收妥，走道保持淨空。'][v];
+    choices = [mk('stow', '幫你放進可用空櫃', v !== 2, 5), mk('relocate', v===1?'擠進旅客上方已滿的櫃子':'先把行李留在走道', false, 6), mk('check', '查看已收好的行李', v === 2, 4)];
+    choices.forEach(c => { c.feedback = c.good ? repaired : ['走道有行李，頭頂櫃有空位；現在需要協助收妥。', '旅客上方已滿，但另一側有空櫃；請使用畫面中的可用空櫃。', '行李已收妥、走道淨空；現在只需查看確認。'][v]; });
   } else if (t.id === 'belt') {
     quote = ['嗯？你剛剛說什麼？', '這個圖示是什麼意思？', '這樣可以了嗎？'][v];
     description = ['旅客盯著手機，安全帶尚未扣好。', '旅客指著圖示，安全帶尚未扣好。', '旅客已扣好安全帶，等你查看。'][v];
@@ -215,9 +216,11 @@ function choicesFor(s, t) {
     description = `${urgent ? `附近的行李仍擋在走道。` : '走道行李已清除。'}${t.acknowledged ? '旅客已接受過一次等候安排。' : '旅客正在座位等候。'}`;
     choices = [
       mk('serve', t.id === 'water' ? '我來送水' : '我來拿毯子', !urgent, 8, { safetyError: !!urgent, feedback: urgent ? '走道仍被行李占用，現在應先處理行李；可回應等候或交接。' : '旅客需求已完成。' }),
-      mk('handoff', t.id === 'water' ? '請同事送水' : '請同事拿毯子', available, 3, { handoff: true, tags: ['3秒', `本輪還可交接 ${s.handoffTokens} 次`, '同事約 12 秒送達'], feedback: available ? '已交接，待同事送達。回饋較少，名額用完不會恢復。' : '交接名額已用完，請親自協助或安排等候。' }),
-      mk('wait', '請稍等，我會回來', !t.acknowledged, 3, { ack: true, tags: ['3秒', t.acknowledged?'已延長過等候':'讓這位旅客多等 12 秒', '不增加巡艙時間'], feedback: !t.acknowledged ? '旅客願意再等一下，需求還沒完成。' : '已延長過等候，重複說明不會完成需求。' })
+      mk('handoff', t.id === 'water' ? '請同事送水' : '請同事拿毯子', available, 3, { handoff: true, tags: ['3秒', '你可以繼續巡艙'], feedback: available ? '已交接，待同事送達。回饋較少，名額用完不會恢復。' : '交接名額已用完，請親自協助或安排等候。' }),
+      mk('wait', s.hazards.some(h=>!h.done)||urgent?'我先清理走道，再來協助您':s.tasks.some(t=>t.kind==='safety'&&!t.done)?'我先完成安全檢查，再回來':'我會回來送上，請稍等', !t.acknowledged, 3, { ack: true, tags: ['3秒', '旅客留在座位等候'], feedback: !t.acknowledged ? '旅客願意再等一下，需求還沒完成。' : '已延長過等候，重複說明不會完成需求。' })
     ];
+    choices=choices.filter(c=>!c.handoff||available).filter(c=>!c.ack||!t.acknowledged);
+    if(urgent&&t.acknowledged)choices.push(mk('leave','先清理走道行李，馬上回來',true,0,{leave:true,tags:[]}));
   }
   if(s.handsOn&&!s.contextual)for(const c of choices){
     const steps=actionSteps({kind:c.handoff?'handoff':c.ack?'wait':'task',taskId:t.id,choice:c});
@@ -225,7 +228,7 @@ function choicesFor(s, t) {
   }
   if(s.contextual)for(const c of choices)c.tags=c.tags.filter(tag=>!/^\d+秒$/.test(tag));
   t.quote = quote; t.description = description;
-  return { handoffHint: choices.some(c=>c.handoff) ? '請同事：本輪可用 1 次，聯繫後約 12 秒送達，你可繼續巡艙。請稍等：只延長這位旅客的耐心一次，不增加你的行動時間。' : null, id: t.id, title: t.title, quote, description, choices: shuffle(choices, rng(s.seed + s.decisionSerial++ * 97)) };
+  return { handoffHint: null, id: t.id, title: t.title, quote, description, choices: shuffle(choices, rng(s.seed + s.decisionSerial++ * 97)) };
 }
 
 export function interact(s) {
@@ -235,6 +238,7 @@ export function interact(s) {
   const hazard = s.hazards.find(h => h.id === s.near && !h.done);
   if (hazard) {
     beginAction(s, { kind: 'clear-hazard', taskId: hazard.taskId, hazardId: hazard.id, time: 0, duration: 5, choice: null });
+    if(s.contextual){const goal=escortGoal(s,hazard);if(goal)s.action.escort={goal,walked:0,initialDistance:Math.hypot(goal.x-s.player.x,goal.z-s.player.z)};}
     s.player.walking = false; feedback(s, `走道旅客 · 協助旅客返回座位，恢復走道。`); return true;
   }
   if (s.near === 'report') {
@@ -259,6 +263,7 @@ export function choose(s, index) {
   if (s.status !== 'playing' || !s.dialog || s.lesson || s.recovery || s.action || !Number.isInteger(index)) return false;
   const t = s.tasks.find(t => t.id === s.dialog.id), choice = s.dialog.choices[index];
   if (!t || !choice) return false;
+  if(choice.leave){s.dialog=null;s.player.walking=false;feedback(s,'先處理走道行李，再回來完成服務。');return true;}
   let judgment=s.judgments.find(j=>j.taskId===t.id);
   if(!judgment){judgment={taskId:t.id,title:t.title,variant:t.variant,context:s.dialog.description,attempts:0,incorrect:0};s.judgments.push(judgment);}
   judgment.context=s.dialog.description;judgment.mode=s.practice?'practice':s.boarding&&!s.boarding.formal?'tutorial':'formal';
@@ -347,7 +352,7 @@ function finishAction(s) {
   s.action = null;
   if (a.kind === 'clear-hazard') {
     const h = s.hazards.find(h => h.id === a.hazardId);
-    if (h && !h.done) { h.done = true; s.hazardsCleared++; emit(s,'hazard-clear',h.taskId); }
+    if (h && !h.done) { h.done = true;h.returnedAt=s.elapsed; s.hazardsCleared++; emit(s,'hazard-clear',h.taskId); }
     feedback(s, '走道已恢復。原本的服務需求仍需處理，紅色事件不等於已送達。', 'good');
   } else if (a.kind === 'correction') {if(s.recovery)s.recovery.ready=true;feedback(s, `${a.choice.feedback} 可按空白鍵 重選；本次失誤仍保留。`, 'warning');}
   else if (t) {
@@ -403,10 +408,15 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
     }
   }
   if (s.action) {
-    s.player.walking = false;
+    if(s.action.escort){
+      const a=s.action,old={x:s.player.x,z:s.player.z};move(s,input?.x,input?.z,dt);a.escort.walked+=Math.hypot(s.player.x-old.x,s.player.z-old.z);
+      const h=s.hazards.find(h=>h.id===a.hazardId),goal=a.escort.goal;
+      if(!h||Math.hypot(s.player.x-h.x,s.player.z-h.z)>2.1||!canStand(s,goal.x,goal.z))cancelEscort(s);
+      else if(a.escort.walked>=.4&&Math.hypot(s.player.x-goal.x,s.player.z-goal.z)<=.22)finishAction(s);
+    }else{ s.player.walking = false;
     if(s.action.interaction){const i=s.action.interaction;if(i.held){i.fill=Math.min(1.2,i.fill+dt);updateActionProgress(s.action);}}
     else {s.action.time = Math.min(s.action.duration, s.action.time + dt);
-    if (s.action.duration - s.action.time <= EPSILON) { s.action.time = s.action.duration; finishAction(s); }}
+    if (s.action.duration - s.action.time <= EPSILON) { s.action.time = s.action.duration; finishAction(s); }}}
   } else move(s, input?.x, input?.z, dt);
   for (const h of s.hazards) {
     if (h.collisionPending && !rectBlocked(s.player.x, s.player.z, -.38, .38, h.z - .34, h.z + .34)) h.collisionPending = false;
@@ -418,4 +428,19 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
 export function ackRecovery(s){
  if(s.status!=='playing'||!s.recovery?.ready)return false;
  const decision=s.recovery.decision;s.recovery=null;s.dialog=decision;s.player.walking=false;if(s.pendingAisleLesson){s.pendingAisleLesson=false;showLesson(s,'aisle');}return true;
+}
+
+function escortGoal(s,h){
+ const task=s.tasks.find(t=>t.id===h.taskId),side=task?.side==='right'?1:-1,approach=s.player.z<h.z?-1:s.player.z>h.z?1:h.z>8?-1:1;
+ for(const d of [.72,.97,1.22,1.47,1.67])for(const x of [side*.43,side*.30,-side*.43,side*.55,-side*.55]){
+  const z=h.z+approach*d;if(Math.hypot(x-s.player.x,z-s.player.z)<.6||!canStand(s,x,z))continue;
+  let clear=true;for(let n=1;n<=32;n++){const q=n/32;if(!canStand(s,s.player.x+(x-s.player.x)*q,s.player.z+(z-s.player.z)*q)){clear=false;break;}}
+  if(clear)return {x,z};
+ }
+ // Very constrained geometry uses a short return-to-seat cue, never a trapped goal.
+ return null;
+}
+export function cancelEscort(s){
+ if(!['playing','paused'].includes(s.status)||!s.action?.escort)return false;
+ const taskId=s.action.taskId;s.action=null;s.player.walking=false;emit(s,'escort-cancel',taskId);feedback(s,'暫停引導，旅客仍在原處。靠近後可重新招呼。');return true;
 }

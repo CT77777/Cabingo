@@ -190,7 +190,7 @@ def main():
     strip=root.xpath('//section[@class="flight-strip"]')[0];panel=stage.getparent()
     start_card=root.xpath('//div[@class="start-card"]')[0];rules_node=root.xpath('//div[@class="rules"]')[0]
     description=by_id('decisionDescription');decision=by_id('decisionCard')
-    reading_ids=['decisionCard','lessonCard','resultCard']
+    reading_ids=['decisionCard','resultCard']
     away=by_id('awayOverlay')
     check('Focus pause is a modal outside the inert game surface',away.get('role')=='dialog' and away.get('aria-modal')=='true' and by_id('gameSurface') not in away.iterancestors())
     check('Focus pause covers the whole viewport above every HUD',computed(away,1512,801,False).get('position')=='fixed' and computed(away,1512,801,False).get('inset')=='0' and int(computed(away,1512,801,False).get('z-index','0'))>20)
@@ -205,6 +205,8 @@ def main():
     check('Aisle warning separates the one-time announcement from changing directions',by_id('aisleAlertTitle').get('role')=='alert' and by_id('aisleAlertDirection').get('aria-live') is None and by_id('aisleAlert').get('hidden') is not None)
     check('Game feedback remains a polite live region',by_id('feedback').get('role')=='status' and by_id('feedback').get('aria-live')=='polite')
     check('Practice recovery feedback precedes the unchanged choice area',description.getparent() is decision and list(decision).index(description)<list(decision).index(by_id('choices')))
+    check('Blocking lessons live outside the inert game surface',by_id('lessonCard').getparent() is by_id('lessonOverlay') and by_id('gameSurface') not in by_id('lessonOverlay').iterancestors() and by_id('lessonCard').get('aria-modal')=='true')
+    check('Dialog removes repeated location, handoff paragraph and reading footer',not root.xpath('//*[@id="decisionTag" or @id="handoffHint"]') and not by_id('decisionCard').xpath('.//small[@class="reading"]'))
     rules_copy=by_id('pauseCard').text_content()
     check('Rules distinguish two-second formal correction from immediate practice retry','修正回饋 2 秒' in rules_copy and '練習可直接重選' in rules_copy and '7 秒' not in rules_copy)
     check('Approved learning disclaimer remains in briefing and rules',all('簡化的學習內容，實際程序以各航空公司訓練為準' in n.text_content() for n in [start_card,rules_node]))
@@ -278,9 +280,15 @@ def main():
         if coarse or width<=700:
             check(prefix+' visible touch controls retain accessible pointer targets',css(touch).get('display')=='grid' and by_id('joystick').get('aria-label') and css(by_id('joystick')).get('touch-action')=='none' and size(css(by_id('joystick'))['width'],by_id('joystick'))>=88 and not touch.xpath('.//button'))
         check(prefix+' manual pause shares the centered modal outside the game',by_id('pauseCard').getparent() is away and by_id('focusPauseCard').getparent() is away and css(by_id('pauseCard')).get('width')=='min(100%,360px)' and css(away).get('align-items')=='center' and css(away).get('backdrop-filter')=='blur(8px)')
-        for mode,ident in [('decision','decisionCard'),('lesson','lessonCard'),('result','resultCard')]:
+        body.set('data-panel','lesson')
+        check(prefix+' lesson is centered above the game',css(by_id('lessonOverlay')).get('position')=='fixed' and css(by_id('lessonOverlay')).get('inset')=='0' and css(by_id('lessonOverlay')).get('place-items')=='center')
+        check(prefix+' lesson card owns bounded scrolling',css(by_id('lessonCard')).get('max-height')=='100%' and css(by_id('lessonCard')).get('overflow')=='auto')
+        check(prefix+' lesson hides background controls and checklist',css(dock).get('display')=='none' and css(aside).get('display')=='none')
+        key_style=css(by_id('interactKey'))
+        check(prefix+' Space keycap cannot shrink or wrap',key_style.get('flex')=='0 0 auto' and key_style.get('white-space')=='nowrap')
+        for mode,ident in [('decision','decisionCard'),('result','resultCard')]:
             body.set('data-panel',mode);as_=css(aside);card=by_id(ident)
-            check(prefix+' '+mode+' retains viewport canvas and normal drawer content',css(stage).get('inset')=='0' and css(canvas).get('height')=='100%' and css(card).get('position','static')=='static' and css(card).get('pointer-events')=='auto' and css(card).get('flex-shrink')=='0')
+            check(prefix+' '+mode+' retains viewport canvas and normal drawer content',css(stage).get('inset')=='0' and css(canvas).get('height')=='100%' and css(card).get('position','static') in ['static','relative'] and css(card).get('pointer-events')=='auto' and css(card).get('flex-shrink')=='0')
             check(prefix+' '+mode+' drawer scrolls without a duplicate checklist',as_.get('overflow')=='auto' and as_.get('pointer-events')=='auto' and css(by_id('taskDetails')).get('display')=='none')
             if width<=700:
                 check(prefix+' '+mode+' phone reading replaces movement controls with a bottom drawer',as_.get('top')=='auto' and as_.get('width')=='auto' and as_.get('pointer-events')=='auto' and css(dock).get('display')=='none' and css(guidance).get('display')=='none')

@@ -11,15 +11,16 @@ assert.equal(countdownPresentation({status:'playing',duration:100,elapsed:90}).l
 assert.equal(countdownPresentation({status:'playing',practice:true,duration:100,elapsed:90}).visible,false);
 console.log('PASS joystick deadzone/clamp/diagonal and countdown 30/10 second boundaries');
 const game=await import('../public/preflight.mjs');
+function startReady(s){game.start(s);if(s.lesson?.id==='serviceIntro')game.dismissLesson(s);}
 for(const practice of [false,true]){
- const s=game.createState({seed:1,contextual:true,practice});game.start(s);const t=s.tasks.find(t=>t.id==='belt');s.player.z=t.z-.8;game.interact(s);
+ const s=game.createState({seed:1,contextual:true,practice});startReady(s);const t=s.tasks.find(t=>t.id==='belt');s.player.z=t.z-.8;game.interact(s);
  const order=s.dialog.choices.map(c=>c.id);game.choose(s,s.dialog.choices.findIndex(c=>!c.good));
  assert(s.recovery);assert.equal(s.recovery.ready,practice);assert.equal(s.lesson,null);
  if(!practice)for(let i=0;i<20;i++)game.tick(s,.1);
  assert(s.recovery.ready);const elapsed=s.elapsed;game.tick(s,.1);assert.equal(s.elapsed,elapsed);
  assert(game.ackRecovery(s));assert.deepEqual(s.dialog.choices.map(c=>c.id),order);assert.equal(s.safetyErrors,practice?0:1);
 }
-const s=game.createState({contextual:true});game.start(s);s.lessonSeen=['aisle'];s.elapsed=69.95;game.tick(s,.1);game.tick(s,.1);
+const s=game.createState({contextual:true});startReady(s);s.lessonSeen=['aisle'];s.elapsed=69.95;game.tick(s,.1);game.tick(s,.1);
 assert.equal(s.events.filter(e=>e.type==='time-warning'&&e.detail.level===30).length,1);
 s.elapsed=89.95;game.tick(s,.1);game.tick(s,.1);assert.equal(s.events.filter(e=>e.type==='time-warning'&&e.detail.level===10).length,1);
 console.log('PASS centered recovery penalty/read freeze/retry order and one-shot time warnings');
@@ -37,5 +38,5 @@ for(const file of ['index.html','main.js','preflight.mjs','chapters/preflight.mj
  assert(!/按 E(?!nter|sc)/.test(source));assert(!source.includes('空白鍵nter'));assert(!source.includes('空白鍵sc'));assert(!source.includes('水杯出場'));assert(!source.includes('毯子起床'));
 }
 assert.equal(countdownPresentation({status:'playing',duration:100,elapsed:75}).visible,false);
-const queued=game.createState({contextual:true});game.start(queued);const qb=queued.tasks.find(t=>t.id==='belt');queued.player.z=qb.z-.8;game.interact(queued);game.choose(queued,queued.dialog.choices.findIndex(c=>!c.good));queued.tasks.find(t=>t.id==='water').patience=.1;for(let i=0;i<20;i++)game.tick(queued,.1);assert(queued.recovery.ready);game.ackRecovery(queued);assert.equal(queued.lesson?.id,'aisle');
-for(const practice of [true,false]){const q=game.createState({contextual:true,practice});game.start(q);q.tasks.find(t=>t.id==='bag').done=true;const t=q.tasks.find(t=>t.id==='water');q.player.z=t.z-.8;game.interact(q);game.choose(q,q.dialog.choices.findIndex(c=>c.id==='serve'));assert.equal(q.action.duration,3);for(let i=0;i<29;i++)game.tick(q,.1);assert(!t.done);game.tick(q,.1);assert(t.done);}
+const queued=game.createState({contextual:true});startReady(queued);const qb=queued.tasks.find(t=>t.id==='belt');queued.player.z=qb.z-.8;game.interact(queued);game.choose(queued,queued.dialog.choices.findIndex(c=>!c.good));queued.tasks.find(t=>t.id==='water').patience=.1;for(let i=0;i<20;i++)game.tick(queued,.1);assert(queued.recovery.ready);game.ackRecovery(queued);assert.equal(queued.lesson?.id,'aisle');
+for(const practice of [true,false]){const q=game.createState({contextual:true,practice});startReady(q);q.tasks.find(t=>t.id==='bag').done=true;const t=q.tasks.find(t=>t.id==='water');q.player.z=t.z-.8;game.interact(q);game.choose(q,q.dialog.choices.findIndex(c=>c.id==='serve'));assert.equal(q.action.duration,3);for(let i=0;i<29;i++)game.tick(q,.1);assert(!t.done);game.tick(q,.1);assert(t.done);}
