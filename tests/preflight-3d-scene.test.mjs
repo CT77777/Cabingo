@@ -21,6 +21,7 @@ globalThis.__CabinMockRenderer=class {
 const approx=(a,b,message='')=>assert(Math.abs(a-b)<1e-8,`${message}: ${a} versus ${b}`);
 const object=name=>{const result=lastScene.getObjectByName(name);assert(result,`object ${name} exists`);return result;};
 try {
+  fs.copyFileSync(path.join(root,'public/boarding.mjs'),path.join(temp,'boarding.mjs'));
   fs.copyFileSync(path.join(root,'public/presentation.mjs'),path.join(temp,'presentation.mjs'));
   fs.copyFileSync(path.join(root,'public/vendor/three.core.min.js'),path.join(temp,'three.core.mjs'));
   fs.writeFileSync(path.join(temp,'three.module.mjs'),fs.readFileSync(path.join(root,'public/vendor/three.module.min.js'),'utf8').replaceAll('./three.core.min.js','./three.core.mjs'));
@@ -168,6 +169,20 @@ try {
   colleagueState.status='playing';colleagueState.handoffJob.remaining=.5;view.render(colleagueState,.016);assert(object('delivery-water').visible);
   colleagueState.handoffJob=null;const delegatedWater=colleagueState.tasks.find(t=>t.id==='water');delegatedWater.done=true;delegatedWater.handoff=true;delegatedWater.completedAt=12;colleagueState.elapsed=12;const completedLabels=view.render(colleagueState,.016).labels;assert(completedLabels.some(l=>l.id==='coworker'&&l.text.includes('已送達')));
   colleagueState.elapsed=22;assert(!view.render(colleagueState,.016).labels.some(l=>l.id==='coworker'),'settled colleague does not block report labels');
+  const engine=await import(pathToFileURL(path.join(root,'public/preflight.mjs')));
+  const boarding=engine.createState({chapterId:'boarding',seed:7,contextual:true});engine.start(boarding);boarding.renderTargets=engine.targets(boarding);view.render(boarding,.016);
+  const walker=object('boarding-walking-elder');assert(walker.visible);approx(walker.position.z,3);assert(!object('returning-elder').visible);
+  boarding.player.z=2;engine.interact(boarding);const visibleClues=view.render(boarding,.016).labels;assert(visibleClues.some(l=>l.id==='boarding-pass-0'&&l.text.includes('3C')));
+  const frozenBoarding=JSON.stringify(boarding.boarding);view.render(boarding,1);assert.equal(JSON.stringify(boarding.boarding),frozenBoarding,'scene never moves rules actors');
+  engine.closeDialog(boarding);const guide=boarding.tasks.find(t=>t.id==='guide');guide.done=true;const elder=boarding.boarding.actors[0];elder.status='seated';elder.x=1.25;elder.z=7;
+  view.render(boarding,.016);assert(!walker.visible);assert(object('boarding-seated-elder').visible);
+  const next=engine.createState({characterMemory:{elder:{helped:true,mistakes:0}}});next.renderTargets=engine.targets(next);view.render(next,.016);assert(object('returning-elder').visible);assert(!object('boarding-seated-elder').visible);
+  // The fixed elder appearance uses the full shared idle/reaction animation path.
+  engine.start(next);view.render(next,.016);const elderHead=object('returning-elder').getObjectByName('head'),baselineHead=elderHead.rotation.x;
+  const beltTask=next.tasks.find(t=>t.id==='belt');beltTask.done=true;next.events.push({seq:++next.eventSeq,type:'complete',taskId:beltTask.id});
+  view.render(next,.016);view.render(next,.1);assert(Math.abs(elderHead.rotation.x-baselineHead)>.05,'returning elder nods on completion');
+  assert(Number.isFinite(elderHead.parent.position.y)&&elderHead.parent.position.y!==0,'returning elder retains finite breathing idle');
+  report.checks.push('Boarding standing/seated actors and physical passes follow rule state; evidence labels and returning elder persist across chapters');
   const allGeometry=new Set(),allMaterials=new Set();lastScene.traverse(o=>{if(o.geometry)allGeometry.add(o.geometry);if(o.material)allMaterials.add(o.material);});
   let geometryDisposals=0,materialDisposals=0;
   for(const g of allGeometry)g.addEventListener('dispose',()=>geometryDisposals++);

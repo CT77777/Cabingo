@@ -494,3 +494,10 @@ body[data-panel=recovery] aside, body[data-panel=recovery] .control-dock, body[d
  .touch-pad { grid-template-columns:92px!important; }
  aside { bottom:calc(var(--safe-bottom) + var(--dock-height) + 8px); }
 }
+
+.evidence-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; margin:10px 0; }
+.evidence-cards>div { border:1px solid #a8dfcb66; border-left:3px solid var(--mint); border-radius:5px; padding:9px 12px; background:#eaf1e9; color:#173443; }
+.evidence-cards dt { font-size:10px; letter-spacing:.05em; }
+.evidence-cards dd { font-size:14px; font-weight:700; margin:4px 0 0; }
+.boarding-traffic { color:var(--mint); font-size:12px; border-top:1px solid #a8dfcb44; padding-top:10px; }
+#nextChapterButton { width:100%; margin:10px 0; }
