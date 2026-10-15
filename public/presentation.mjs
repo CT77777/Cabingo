@@ -24,9 +24,9 @@ export function actionPose({taskId,choiceId,progress=0,reducedMotion=false}={}) 
 export function decisionPose({player,task,aspect=1.6}) {
   const side=task.side==='right'?1:-1, z=task.z;
   // High shoulder angle keeps hands, floor evidence and bins in the upper scene.
-  const wide=task.id==='bag', portrait=aspect<.8;
-  return {position:[-side*(wide?1.2:.5),wide?4.6:3.6,z-(portrait?5.6:4.0)],
-    target:[wide?0:side*.7,wide?1.45:1.1,z+(portrait?1.8:.6)],fov:wide?55:48};
+  const wide=task.id==='bag', k=Math.max(1,.95/Math.max(.35,aspect));
+  return {position:[-side*(wide?1.2:.8),(wide?5.8:4.5)*k,z-(wide?6:4.5)*k],
+    target:[wide?0:side*.3,wide?1.7:1.55,z-(wide?1.6:1.2)],fov:wide?55:48};
 }
 function overlaps(a,b){return a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;}
 export function layoutLabels(labels,{width,height,exclusions=[]}) {

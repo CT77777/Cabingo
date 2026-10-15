@@ -101,7 +101,7 @@ try {
       if(i===180)for(const mode of ['paused','dialog','lesson']) {
         const before=object('task-luggage').position.clone(),cameraBefore=lastCamera.position.clone();
         if(mode==='paused')s.status='paused';else s[mode]={id:'bag'};
-        view.render(s,10);assert(object('task-luggage').position.equals(before),`bag frozen by ${mode}`);assert(lastCamera.position.equals(cameraBefore),`camera frozen by ${mode}`);
+        view.render(s,10);assert(object('task-luggage').position.equals(before),`bag frozen by ${mode}`);if(mode!=='dialog')assert(lastCamera.position.equals(cameraBefore),`camera frozen by ${mode}`);
         s.status='playing';s.dialog=null;s.lesson=null;
       }
     }
@@ -133,6 +133,13 @@ try {
     s.status='playing';s.dialog=null;s.lesson=null;
   }
   s.reducedMotion=true;view.render(s,.016);approx(body.position.y,0,'reduced motion removes walk bob');
+  const closeup=makeState();closeup.dialog={id:'bag'};const elapsedBefore=closeup.elapsed;
+  for(let i=0;i<40;i++)view.render(closeup,1/60);
+  assert.notEqual(lastCamera.position.x,0,'safety decision moves to shoulder view while reading');
+  assert.equal(closeup.elapsed,elapsedBefore);
+  assert.equal(typeof view.getScreenPosition,'function');
+  const pinned=view.render(makeState(),.016).labels.find(l=>l.id==='bag');
+  assert.equal(pinned.anchor.x,-1.25,'task label anchored at passenger');
   const deliveryState=makeState();deliveryState.action={id:77,kind:'task',taskId:'water',time:4,duration:8,choice:{id:'serve'}};
   view.render(deliveryState,.016);const cup=object('delivery-water');assert(cup.visible);const cupAt=cup.position.clone();
   deliveryState.status='paused';view.render(deliveryState,1);assert(cup.position.equals(cupAt));

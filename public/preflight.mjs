@@ -104,8 +104,8 @@ export function chapterReady(s) {
 }
 export function targets(s) {
   return [
-    ...s.hazards.filter(h => !h.done).map(h => ({ id: h.id, x: 0, z: h.z, kind: 'hazard', label: `${h.seat} 恢復走道`, active: true, done: false })),
-    ...s.tasks.filter(t => t.active && !t.done && !t.assigned).map(t => ({ id: t.id, x: 0, z: t.z, kind: t.kind, label: `${t.seat} ${t.title}`, active: true, done: false })),
+    ...s.hazards.filter(h => !h.done).map(h => ({ id: h.id, x: 0, z: h.z, kind: 'hazard', label: `恢復走道`, active: true, done: false })),
+    ...s.tasks.filter(t => t.active && !t.done && !t.assigned).map(t => ({ id: t.id, x: 0, z: t.z, kind: t.kind, label: `${t.title}`, active: true, done: false })),
     { id: 'report', ...WORLD.reportPoint, kind: 'report', label: '前方巡艙回報', active: true, done: s.status === 'finished' && s.endReason === 'complete' }
   ];
 }
@@ -197,7 +197,7 @@ function choicesFor(s, t) {
     const urgent = s.tasks.find(x => x.id === 'bag' && !x.done && x.variant !== 2);
     const available = s.handoffTokens > 0 && !s.handoffJob;
     quote = t.id === 'water' ? '可以給我一杯水嗎？' : '可以給我一條毯子嗎？';
-    description = `${urgent ? `${urgent.seat} 的行李仍擋在走道。` : '走道行李已清除。'}${t.acknowledged ? '旅客已接受過一次等候安排。' : '旅客正在座位等候。'}`;
+    description = `${urgent ? `附近的行李仍擋在走道。` : '走道行李已清除。'}${t.acknowledged ? '旅客已接受過一次等候安排。' : '旅客正在座位等候。'}`;
     choices = [
       mk('serve', t.id === 'water' ? '我來送水' : '我來拿毯子', !urgent, 8, { safetyError: !!urgent, feedback: urgent ? '走道仍被行李占用，現在應先處理行李；可回應等候或交接。' : '旅客需求已完成。' }),
       mk('handoff', t.id === 'water' ? '請同事送水' : '請同事拿毯子', available, 3, { handoff: true, tags: ['3秒', `交接剩${s.handoffTokens}次`, '同事需12秒'], feedback: available ? '已交接，待同事送達。回饋較少，名額用完不會恢復。' : '交接名額已用完，請親自協助或安排等候。' }),
@@ -215,7 +215,7 @@ export function interact(s) {
   const hazard = s.hazards.find(h => h.id === s.near && !h.done);
   if (hazard) {
     beginAction(s, { kind: 'clear-hazard', taskId: hazard.taskId, hazardId: hazard.id, time: 0, duration: 5, choice: null });
-    s.player.walking = false; feedback(s, `${hazard.seat} · 協助旅客返回座位，恢復走道。`); return true;
+    s.player.walking = false; feedback(s, `走道旅客 · 協助旅客返回座位，恢復走道。`); return true;
   }
   if (s.near === 'report') {
     if (!chapterReady(s)) {
@@ -308,16 +308,16 @@ function finishAction(s) {
 function demandTick(s) {
   for (const t of s.tasks) {
     if (t.kind !== 'service') continue;
-    if (!t.active && s.elapsed + EPSILON >= t.spawn) { t.active = true; emit(s,'demand',t.id); feedback(s, `${t.seat} 新需求：${t.title}`); }
+    if (!t.active && s.elapsed + EPSILON >= t.spawn) { t.active = true; emit(s,'demand',t.id); feedback(s, `${t.title} 新需求：${t.title}`); }
     if (!t.active || t.done || t.assigned || (s.action?.taskId === t.id && s.action.kind !== 'correction')) continue;
     const age = s.elapsed - t.spawn;
-    if (!t.warned && age + EPSILON >= t.patience - 10) { t.warned = true; feedback(s, `${t.seat} 等候接近上限；10 秒內未回應，可能走到走道詢問。`, 'warning'); }
+    if (!t.warned && age + EPSILON >= t.patience - 10) { t.warned = true; feedback(s, `${t.title} 等候接近上限；10 秒內未回應，可能走到走道詢問。`, 'warning'); }
     if (!t.late && age + EPSILON >= t.patience) {
       t.late = true; penalizeService(s, 8);
       const h = { id: `hazard-${t.id}`, taskId: t.id, seat: t.seat, x: 0, z: t.z, row: t.row, done: false };
       h.collisionPending = rectBlocked(s.player.x, s.player.z, -.38, .38, h.z - .34, h.z + .34);
       s.hazards.push(h);
-      feedback(s, `${t.seat} 已走到走道詢問。紅色標記需先處理，服務需求仍保留。`, 'warning');
+      feedback(s, `${t.title} 的旅客已走到走道詢問。紅色標記需先處理，服務需求仍保留。`, 'warning');
       showLesson(s, 'aisle');
     }
   }
@@ -344,7 +344,7 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
     if (s.handoffJob.remaining <= EPSILON) {
       const t = s.tasks.find(t => t.id === s.handoffJob.taskId);
       completeTask(s, t, true); s.handoffJob = null;
-      feedback(s, `${t.seat} 同事已完成需求。交接名額不會恢復。`, 'good');
+      feedback(s, `${t.title}：同事已完成需求。交接名額不會恢復。`, 'good');
     }
   }
   if (s.action) {

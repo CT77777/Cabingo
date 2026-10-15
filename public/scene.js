@@ -375,7 +375,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       if(record.service)record.service.visible=!task.done&&!self;
     }
   }
-  let sizeWidth = 0, sizeHeight = 0, disposed = false, firstFrame = true, previousMode = null, walkPose = 0;
+  let resized = false, sizeWidth = 0, sizeHeight = 0, disposed = false, firstFrame = true, previousMode = null, walkPose = 0;
   let visualTime=0, eventRun=null,eventSeq=0; const reactions=new Map();
   const haloMaterial=ownMaterial(new THREE.MeshBasicMaterial({color:'#a8dfcb',transparent:true,opacity:.65,depthWrite:false}));
   const haloGeometry=ownGeometry(new THREE.TorusGeometry(.36,.025,5,24));
@@ -386,7 +386,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     if (disposed) return;
     const width = Math.max(1,Math.round(canvas.clientWidth || 800)), height = Math.max(1,Math.round(canvas.clientHeight || 500));
     if (width !== sizeWidth || height !== sizeHeight) {
-      renderer.setSize(width,height,false); camera.aspect = width/height; camera.updateProjectionMatrix(); sizeWidth = width; sizeHeight = height;
+      resized=true;renderer.setSize(width,height,false); camera.aspect = width/height; camera.updateProjectionMatrix(); sizeWidth = width; sizeHeight = height;
     }
   }
   const contextLost = event => { event.preventDefault(); onContextLost?.(); };
@@ -453,17 +453,22 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       ringMaterial.color.set(near ? '#ffe4a1' : selected.kind === 'service' ? '#9dd8dd' : '#e9b956');
     }
     const mode = state.cameraMode === 'overview' ? 'overview' : 'follow';
-    const cameraPose = getCabinCameraPose(mode,player,camera.aspect);
+    const decisionTask=tasks.find(t=>t.id===state.dialog?.id&&(t.kind==='safety'||['bag','belt','tray'].includes(t.id)));
+    const cameraPose = decisionTask ? decisionPose({player,task:decisionTask,aspect:camera.aspect}) : getCabinCameraPose(mode,player,camera.aspect);
     wantedPosition.set(...cameraPose.position); wantedTarget.set(...cameraPose.target);
-    const ease = firstFrame || reducedMotion || previousMode !== mode ? 1 : state.status === 'paused' || state.dialog || state.lesson ? 0 : 1-Math.exp(-Math.min(Math.max(dt,0),.1)*7);
+    const ease = firstFrame || resized || reducedMotion || previousMode !== mode ? 1 : state.status === 'paused' || state.lesson || (state.dialog&&!decisionTask) ? 0 : 1-Math.exp(-Math.min(Math.max(dt,0),.1)*7);
     camera.position.lerp(wantedPosition,ease); cameraTarget.lerp(wantedTarget,ease);
-    camera.position.x = 0; cameraTarget.x = 0; camera.up.set(0,1,0); camera.lookAt(cameraTarget); camera.updateMatrixWorld(true);
-    firstFrame = false; previousMode = mode; renderer.render(scene,camera);
-    const labels = targets.map(target => ({
-      id: target.id, text: target.label || target.title || target.id,
-      ...projectGamePoint(camera,{x:target.x||0,y:target.kind === 'hazard' ? 2.3 : .36,z:target.z},sizeWidth,sizeHeight),
-      kind: target.kind || 'safety', near: target.id === (typeof state.near === 'string' ? state.near : state.near?.id), selected: target.id === selected?.id
-    }));
+    camera.fov=cameraPose.fov;camera.updateProjectionMatrix(); camera.up.set(0,1,0); camera.lookAt(cameraTarget); camera.updateMatrixWorld(true);
+    firstFrame = false; resized=false; previousMode = mode; renderer.render(scene,camera);
+    const labels = targets.filter(target=>!decisionTask||target.id===decisionTask.id).map(target => {
+      const task=tasks.find(t=>t.id===target.id), hazard=hazards.find(h=>h.id===target.id);
+      const anchor=task?{x:(task.side==='right'?1:-1)*1.25,y:1.95,z:task.z-.065}:{x:target.x||0,y:hazard?2.45:.5,z:target.z};
+      return {id:target.id,text:task?.title||target.label||target.id,anchor,
+        ...projectGamePoint(camera,anchor,sizeWidth,sizeHeight),
+        icon:target.kind==='hazard'?'alert':task?.id==='water'?'water':task?.id==='blanket'?'blanket':task?.id==='question'?'question':target.kind==='report'?'report':'alert',
+        kind:target.kind||'safety',distance:Math.hypot((target.x||0)-player.x,target.z-player.z),
+        near:target.id===(typeof state.near==='string'?state.near:state.near?.id),selected:target.id===selected?.id};
+    });
     const bagTask = tasks.find(t => t.id === 'bag'), bagRecord = records.get('bag');
     if (bagTask && bagRecord && !bagTask.done && selected?.id === 'bag') {
       for (const [index,b] of bagRecord.bins.entries()) {
@@ -484,5 +489,5 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     for (const geometry of geometries) geometry.dispose(); for (const material of materials) material.dispose(); renderer.dispose();
     records.clear(); hazardRecords.clear(); staticBatches.clear(); materialCache.clear(); geometries.clear(); materials.clear();
   }
-  resize(); return {render,resize,dispose};
+  resize(); return {render,resize,dispose,getScreenPosition:point=>projectGamePoint(camera,point,sizeWidth,sizeHeight)};
 }

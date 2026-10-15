@@ -260,3 +260,45 @@ body[data-panel=error] aside, body[data-panel=error] .control-dock, body[data-pa
   *, *:before, *:after { animation: none!important; transition: none!important; scroll-behavior: auto!important; }
 }
 .decision-card #decisionDescription[data-kind=warning] { color: #8a3e2e; font-weight: 600; }
+/* v0.3: sound controls, passenger icons and safety decision close-ups. */
+.volume-control { display:flex; align-items:center; gap:6px; padding:4px 7px; border-radius:7px; background:#102b3ae8; font-size:11px; min-height:44px; }
+#volumeSlider { width:62px; min-height:36px; accent-color:var(--mint); }
+#audioStatus { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+nav>button { min-height:44px; min-width:44px; }
+.target-label { height:32px; min-width:32px; padding:7px 10px 7px 32px; background-repeat:no-repeat; background-position:5px center; background-size:22px; border-radius:16px; font-size:12px; }
+.target-label.compact { width:30px; height:30px; min-width:30px; padding:0; background-position:center; }
+.target-label:after { display:none; }
+.target-label.detail { padding:7px 10px; background-image:none!important; }
+.handoff-hint { padding:8px 10px; border-left:3px solid #618f74; background:#e2e8d7; border-radius:4px; }
+.result-stars { font-size:25px; letter-spacing:3px; color:var(--gold); }
+.result-advice { border-left:2px solid var(--mint); padding-left:10px; }
+.best-record { font-size:11px!important; color:var(--gold)!important; }
+body[data-panel=decision][data-decision-kind=safety] aside { top:auto; left:50%; right:auto; bottom:var(--safe-bottom); width:min(620px, calc(100% - var(--safe-left) - var(--safe-right))); max-height:42dvh; transform:translateX(-50%); overflow:auto; }
+body[data-panel=decision][data-decision-kind=safety] .guidance,
+body[data-panel=decision][data-decision-kind=safety] .control-dock,
+body[data-panel=decision][data-decision-kind=safety] .scene-badge { display:none; }
+@media (max-width:700px) {
+  .brand>span { font-size:14px; }
+  .brand>b { display:none; }
+  nav { gap:3px; }
+  nav>button { font-size:10px; padding:5px; }
+  .volume-control { font-size:0; padding:3px; }
+  #volumeSlider { width:45px; }
+  .interact>b { width:auto; min-width:32px; font-size:11px; display:grid; }
+  body[data-panel=decision][data-decision-kind=safety] aside { max-height:42dvh; }
+}
+@media (pointer:coarse) { .interact>b { font-size:0; width:auto; min-width:32px; } .interact>b:after { content:'互動'; font-size:11px; } }
+/* Translucent decision surface: the cabin remains visible behind the choices. */
+.decision-card { background:#102430c7; color:#f2f5e9; border:1px solid #d3ead52b; box-shadow:0 12px 36px #071a242e; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
+.decision-card .eyebrow { color:#b4d5c6; }
+.decision-card p { color:#d9e6da; }
+.decision-card .passenger-quote { color:#f0f4df; }
+.decision-card .text-button { color:#d8e8d8; }
+.choice { background:#e6f5e714; border-color:#c5e1ce3b; color:#f2f5e9; }
+.choice>b { border-color:#c9e7d14d; color:#c8e6d1; }
+.choice-tags span { color:#d4e4d3; border-color:#c6ddc02e; }
+.choice:hover, .choice:focus-visible { background:#a8dfcb33; border-color:#b3dbc7a6; }
+.reading { color:#cbdccd!important; }
+.handoff-hint { background:#a8dfcb12; border-left-color:#a8dfcb; }
+.decision-card #decisionDescription[data-kind=warning] { color:#ffdbb7; }
+.interact>b { color:#edf3df; }
