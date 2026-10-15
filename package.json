@@ -1,6 +1,6 @@
 {
   "name": "cabingo",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Cabin, Please. standalone 3D preflight browser game",
   "engines": {

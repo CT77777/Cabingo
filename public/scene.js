@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three.module.min.js';
-import {passengerPose,actionPose,decisionPose} from './presentation.mjs?v=0.3.0';
+import {passengerPose,actionPose,decisionPose} from './presentation.mjs?v=0.3.1';
 
 // Gameplay and scene share x/z coordinates. Both cameras face +z along the
 // centreline, so screen-right input is world -x, and screen-up is world +z.

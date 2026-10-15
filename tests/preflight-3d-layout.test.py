@@ -213,6 +213,17 @@ def main():
     description.set('data-kind','warning')
     for ident in ['decisionTitle','decisionQuote','decisionDescription','lessonTitle','lessonCopy','actionLabel','resultTitle','resultCopy','resultDetails']:by_id(ident).text='測試顯示文字'
     viewports=[(1512,801,False),(390,844,True),(320,568,True),(780,360,True),(756,400,False),(1024,600,False),(390,320,True)]
+    # Responsive decision choices: three columns only when the viewport is wide.
+    for test_width in [390,700,899,900,1512]:
+        body.set('data-panel','decision')
+        choice_style=computed(by_id('choices'),test_width,844,False)
+        check(f'{test_width}px decision choices use responsive columns',choice_style.get('grid-template-columns')==('repeat(3, minmax(0, 1fr))' if test_width>=900 else 'minmax(0, 1fr)'),choice_style.get('grid-template-columns'))
+    body.set('data-panel','decision');body.set('data-decision-kind','safety')
+    for test_width,test_height in [(932,430),(1024,521),(1024,600),(1512,801)]:
+        drawer=computed(aside,test_width,test_height,True)
+        check(f'{test_width}x{test_height} safety wide panel keeps its intended width',drawer.get('width')=='min(960px, calc(100% - var(--safe-left) - var(--safe-right)))')
+        check(f'{test_width}x{test_height} wide choices keep consistent room below the HUD',drawer.get('max-height')=='calc(100dvh - var(--safe-top) - var(--safe-bottom) - 104px)')
+    body.attrib.pop('data-decision-kind',None)
     geometry=[]
     for vp in viewports:
         width,height,coarse=vp;prefix=f'{width}x{height}'+(' coarse' if coarse else ' fine')
@@ -258,6 +269,8 @@ def main():
                 for safe_name,safe in [('plain',{}),('notched',{'safe-area-inset-top':47,'safe-area-inset-right':18,'safe-area-inset-bottom':34,'safe-area-inset-left':18})]:
                     max_height=size(as_['max-height'],aside,safe=safe);bottom=size(as_['bottom'],aside,safe=safe);top=height-bottom-max_height;safe_top=size('var(--safe-top)',aside,safe=safe)
                     check(prefix+' '+mode+' '+safe_name+' drawer remains bounded below visible cabin',0<max_height<=height*.58 and top>=safe_top+120-.001 and bottom>=safe.get('safe-area-inset-bottom',0),{'maxHeight':max_height,'top':top,'bottom':bottom})
+            elif width>=900 and mode=='decision':
+                check(prefix+' wide decision uses a centered bottom surface',as_.get('top')=='auto' and as_.get('left')=='50%' and as_.get('transform')=='translateX(-50%)' and css(dock).get('display')=='none' and css(guidance).get('display')=='none')
             else:
                 check(prefix+' '+mode+' desktop keeps right-side drawer and movement HUD',as_.get('position')=='absolute' and as_.get('top')!='auto' and size(as_['width'],aside,'width')<width*.5 and css(dock).get('display')!='none' and css(guidance).get('display')!='none')
         body.set('data-panel','decision')

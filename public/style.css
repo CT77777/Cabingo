@@ -99,7 +99,7 @@ aside { position: absolute; z-index: 14; top: calc(var(--safe-top) + 50px); righ
 .decision-card .passenger-quote { font-size: 14px; font-weight: 550; color: #284f49; }
 .decision-card h2 { font-size: 18px; margin-bottom: 5px; }
 .decision-card .text-button { color: #426959; min-width: 36px; min-height: 36px; }
-.choices { display: grid; gap: 7px; margin-top: 13px; }
+.choices { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; margin-top: 13px; }
 .choice { display: flex; align-items: center; gap: 10px; text-align: left; background: #fffdf4; border: 1px solid #b4c7b2; border-radius: 7px; color: #224c43; min-height: 53px; padding: 8px 10px; width: 100%; scroll-margin: 10px; }
 .choice>b { flex-shrink: 0; font-size: 12px; font-weight: 500; border: 1px solid #c2cfb8; border-radius: 3px; padding: 2px 6px; }
 .choice-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -265,10 +265,12 @@ body[data-panel=error] aside, body[data-panel=error] .control-dock, body[data-pa
 #volumeSlider { width:62px; min-height:36px; accent-color:var(--mint); }
 #audioStatus { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
 nav>button { min-height:44px; min-width:44px; }
-.target-label { height:32px; min-width:32px; padding:7px 10px 7px 32px; background-repeat:no-repeat; background-position:5px center; background-size:22px; border-radius:16px; font-size:12px; }
-.target-label.compact { width:30px; height:30px; min-width:30px; padding:0; background-position:center; }
+.target-label { display:inline-flex; align-items:center; gap:6px; height:32px; min-width:32px; padding:4px 8px; border-radius:16px; font-size:12px; }
+.target-label.compact { width:30px; height:30px; min-width:30px; padding:3px; gap:0; }
+.target-label.compact .target-copy { display:none; }
+.target-icon { display:block; width:22px; height:22px; flex:0 0 22px; }
 .target-label:after { display:none; }
-.target-label.detail { padding:7px 10px; background-image:none!important; }
+.target-label.detail { padding:4px 8px; }
 .handoff-hint { padding:8px 10px; border-left:3px solid #618f74; background:#e2e8d7; border-radius:4px; }
 .result-stars { font-size:25px; letter-spacing:3px; color:var(--gold); }
 .result-advice { border-left:2px solid var(--mint); padding-left:10px; }
@@ -302,3 +304,16 @@ body[data-panel=decision][data-decision-kind=safety] .scene-badge { display:none
 .handoff-hint { background:#a8dfcb12; border-left-color:#a8dfcb; }
 .decision-card #decisionDescription[data-kind=warning] { color:#ffdbb7; }
 .interact>b { color:#edf3df; }
+
+@media (min-width:900px) {
+  body[data-panel=decision] aside,
+  body[data-panel=decision][data-decision-kind=safety] aside {
+    top:auto; left:50%; right:auto; bottom:var(--safe-bottom);
+    width:min(960px, calc(100% - var(--safe-left) - var(--safe-right)));
+    max-height:calc(100dvh - var(--safe-top) - var(--safe-bottom) - 104px); transform:translateX(-50%); overflow:auto;
+  }
+  .decision-card .choices { grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
+  .decision-card .choice { align-items:flex-start; min-height:76px; padding:12px; }
+  body[data-panel=decision] .guidance, body[data-panel=decision] .control-dock,
+  body[data-panel=decision] .scene-badge { display:none; }
+}

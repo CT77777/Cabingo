@@ -1,7 +1,7 @@
-import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents} from './preflight.mjs?v=0.3.0';
-import {layoutLabels,crossedMilestones} from './presentation.mjs?v=0.3.0';
-import {createCabinAudio} from './audio.mjs?v=0.3.0';
-import {summarizeResult,parseBest,selectBest} from './results.mjs?v=0.3.0';
+import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents} from './preflight.mjs?v=0.3.1';
+import {layoutLabels,crossedMilestones} from './presentation.mjs?v=0.3.1';
+import {createCabinAudio} from './audio.mjs?v=0.3.1';
+import {summarizeResult,parseBest,selectBest} from './results.mjs?v=0.3.1';
 const $=id=>document.getElementById(id),canvas=$('sceneCanvas');
 const keys=new Set(),touch=new Set(),held=new Set(),choiceBlockedKeys=new Set(),labelElements=new Map();
 const motion=matchMedia('(prefers-reduced-motion: reduce)'),phone=matchMedia('(max-width: 700px)');
@@ -96,17 +96,31 @@ function updateLabels(labels){
  const exclusions=['controlDock','guidance','decisionCard','lessonCard','pauseCard','resultCard','taskDetails','idleCard','sceneStatus'].map(id=>$(id)).filter(e=>!e.hidden).flatMap(e=>{const r=e.getBoundingClientRect?.();return r&&r.width&&r.height?[r]:[];});
  // Header/flight strip: fixed reserved band, independent of label projection.
  exclusions.push({left:0,top:0,right:width,bottom:phone.matches?100:112});
- const prepared=labels.map(l=>{const expanded=l.near||l.kind==='detail',copy=expanded?l.text:'';return {...l,expanded,copy,width:expanded?Math.max(72,copy.length*12+38):30,height:32};});
+ const prepared=labels.map(l=>{
+  const expanded=l.near||l.kind==='detail',copy=expanded?l.text:'';
+  let e=labelElements.get(l.id);if(!e){e=document.createElement('span');labelElements.set(l.id,e);root.append(e);}
+  e.hidden=false;e.className=`target-label ${l.kind||''}${l.near?' near':''}${expanded?' expanded':' compact'}`;
+  const signature=`${l.kind}|${l.icon}|${copy}`;
+  if(e.dataset.content!==signature){
+    const children=[];
+    if(l.kind!=='detail'){
+      const icon=document.createElement('img');icon.className='target-icon';icon.alt='';icon.setAttribute('aria-hidden','true');
+      const path=iconPaths[l.icon]||iconPaths.alert;
+      icon.src=`data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="'+path+'" fill="none" stroke="#214b46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>')}`;
+      children.push(icon);
+    }
+    const label=document.createElement('span');label.className='target-copy';label.textContent=copy;children.push(label);
+    e.replaceChildren(...children);e.dataset.content=signature;
+  }
+  e.setAttribute('aria-label',l.text);e.style.left=`${l.x}px`;e.style.top=`${l.y}px`;
+  return {...l,width:expanded?Math.max(72,copy.length*12+44):30,height:32};
+ });
+ // Complete all DOM writes before reading sizes, avoiding one forced layout per label.
+ for(const l of prepared){const rect=labelElements.get(l.id).getBoundingClientRect?.();if(rect?.width){l.width=rect.width;l.height=rect.height;}}
  const active=new Set();for(const l of layoutLabels(prepared,{width,height,exclusions})){
-  if(!l.visible)continue;active.add(l.id);let e=labelElements.get(l.id);
-  if(!e){e=document.createElement('span');labelElements.set(l.id,e);root.append(e);}
-  e.hidden=false;e.className=`target-label ${l.kind||''}${l.near?' near':''}${l.expanded?' expanded':' compact'}`;
-  e.textContent=l.copy;e.setAttribute('aria-label',l.text);
-  const path=iconPaths[l.icon]||iconPaths.alert;
-  e.style.backgroundImage=`url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="'+path+'" fill="none" stroke="#214b46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>')}")`;
-  e.style.left=`${l.x}px`;e.style.top=`${l.y}px`;
+  const e=labelElements.get(l.id);e.hidden=!l.visible;if(l.visible)active.add(l.id);
  }for(const [id,e] of labelElements)if(!active.has(id))e.hidden=true;
 }
 function frame(time){const dt=Math.min(Math.max((time-last)/1000,0),.05);last=time;if(ready&&view){const wasAction=state.action,heldDir=d=>keys.has(d)||touch.has(d);tick(state,dt,screenInputToWorld(Number(heldDir('right'))-Number(heldDir('left')),Number(heldDir('up'))-Number(heldDir('down'))));if(wasAction&&!state.action)clearMovement();state.renderTargets=targets(state);try{const visual=view.render(state,dt);updateLabels(visual?.labels||[]);}catch(error){fail(error);}if(ready){syncPresentation();if(state.action)$('actionBar').style.width=`${100*state.action.time/state.action.duration}%`;refresh();}}requestAnimationFrame(frame);}
-async function boot(){try{const {createCabinView}=await import('./scene.js?v=0.3.0');view=createCabinView(canvas,{onContextLost:()=>fail(new Error('WebGL context lost'))});ready=true;hide('loading',true);$('startButton').disabled=false;$('practiceButton').disabled=false;text('startButton','開始正式巡艙 →');refresh(true);requestAnimationFrame(frame);}catch(error){fail(error);}}
+async function boot(){try{const {createCabinView}=await import('./scene.js?v=0.3.1');view=createCabinView(canvas,{onContextLost:()=>fail(new Error('WebGL context lost'))});ready=true;hide('loading',true);$('startButton').disabled=false;$('practiceButton').disabled=false;text('startButton','開始正式巡艙 →');refresh(true);requestAnimationFrame(frame);}catch(error){fail(error);}}
 refresh(true);boot();
