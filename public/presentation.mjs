@@ -71,3 +71,10 @@ export function serviceItemPose({source,hand,dest,progress=0}={}){
  const item=p<.2?{...source}:p<.5?mix(source,hand,smooth((p-.2)/.3)):p<.7?{...hand}:mix(hand,dest,smooth((p-.7)/.3));
  return {phase,item,open:p<.2?smooth(p/.2):p<.5?1:1-smooth((p-.5)/.2)};
 }
+
+// The cart stays within reach behind the crew; rendering and pickup share this anchor.
+export function trolleyPresentation(player={}){
+ const x=Number.isFinite(player.x)?player.x:0,z=Number.isFinite(player.z)?player.z:1.5,angle=Number.isFinite(player.angle)?player.angle:0;
+ const edge=z>2&&z<14?.54:2.5;
+ return {x:Math.max(-edge,Math.min(edge,x-Math.sin(angle)*.43)),z:Math.max(.5,Math.min(15.3,z-Math.cos(angle)*.43)),angle};
+}

@@ -494,3 +494,31 @@ body[data-panel=recovery] aside, body[data-panel=recovery] .control-dock, body[d
  .touch-pad { grid-template-columns:92px!important; }
  aside { bottom:calc(var(--safe-bottom) + var(--dock-height) + 8px); }
 }
+/* Replies carry the scene; recurring instructions live in the opening demo. */
+.decision-card .panel-top { justify-content:flex-end; height:24px; margin-bottom:0; }
+.decision-card .panel-top .text-button { min-width:36px; min-height:36px; padding:4px; }
+.interact>b { flex:0 0 auto; width:auto; min-width:64px; padding:0 8px; height:28px; font-size:12px; white-space:nowrap; }
+.interact>span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+@media (max-width:700px) { .interact>b { min-width:44px; font-size:12px; } }
+@media (pointer:coarse) { .interact>b { min-width:44px; font-size:12px; } .interact>b:after { content:none; } }
+.lesson-overlay { position:fixed; inset:0; z-index:54; display:grid; place-items:center; padding:20px; background:#081c2ab8; backdrop-filter:blur(6px); overflow:auto; }
+.lesson-overlay .lesson-card { width:min(100%,480px); max-height:100%; overflow:auto; border:1px solid #a8dfcb88; border-radius:16px; background:#193845f5; padding:28px; box-shadow:0 20px 70px #071a2466; }
+.lesson-overlay h2 { font-size:25px; line-height:1.4; }
+.lesson-overlay p { font-size:17px; line-height:1.7; }
+.lesson-overlay .primary { width:100%; min-height:48px; margin-top:12px; }
+.service-demo { margin:18px 0; }
+.demo-passenger { padding:12px; border:1px solid #a8dfcb55; border-radius:10px; background:#ecf5e90a; font-size:16px; }
+.demo-passenger label { display:block; font-size:12px; color:#c9dbd3; margin-top:10px; }
+.demo-passenger progress { display:block; width:100%; height:10px; accent-color:#a8dfcb; margin-top:6px; }
+.demo-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.demo-actions button { flex:1 1 130px; min-height:44px; padding:10px; font-size:14px; }
+.demo-route { display:flex; list-style:none; padding:0; gap:6px; margin:14px 0; }
+.demo-route li { flex:1; padding:9px 5px; text-align:center; font-size:13px; border-radius:6px; background:#071a2433; color:#a9bfb8; }
+.demo-route .active { background:#a8dfcb; color:#153440; font-weight:700; }
+#demoStatus { font-size:15px; min-height:3em; }
+body[data-panel=lesson] .control-dock, body[data-panel=lesson] .guidance, body[data-panel=lesson] aside { display:none; }
+@media (min-width:900px) { .choices[data-count="2"] { grid-template-columns:repeat(2,minmax(0,1fr)); } .choices[data-count="1"] { grid-template-columns:minmax(0,1fr); } }
+@media (max-width:700px) { .lesson-overlay { padding:16px; } .lesson-overlay .lesson-card { padding:20px; } .lesson-overlay h2 { font-size:22px; } .lesson-overlay p { font-size:16px; } }
+.decision-card { position:relative; }
+.decision-card .panel-top { position:absolute; top:12px; right:12px; height:auto; }
+.decision-card h2 { padding-right:40px; margin-top:0; }

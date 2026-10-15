@@ -43,7 +43,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,reducedMotion=fa
   function step(n=1){for(let i=0;i<n;i++){time+=1000/60;api.frame(time);}return api.getState();}
   const key=(code,key=code,extra={})=>dispatch('keydown',{code,key,...extra}),up=(code,key=code)=>dispatch('keyup',{code,key});
   function tap(code,keyValue=code,extra={}){const e=key(code,keyValue,extra);up(code,keyValue);return e;}
-  function begin(practice=false){ids[practice?'practiceButton':'startButton'].click({detail:1});assert.equal(api.getState().status,'playing');}
+  function begin(practice=false){ids[practice?'practiceButton':'startButton'].click({detail:1});assert.equal(api.getState().status,'playing');if(api.getState().lesson?.id==='serviceIntro')ids.lessonContinue.click({detail:1});}
   function approach(practice=false){begin(practice);key('ArrowUp');for(let i=0;i<100&&api.getState().near!=='belt';i++)step();up('ArrowUp');assert.equal(api.getState().near,'belt');}
   function open(practice=false){approach(practice);tap('Space','Process',{isComposing:true});step();assert.equal(api.getState().dialog.id,'belt');}
   function choice(predicate,{release=true,codePrefix='Digit'}={}){const index=typeof predicate==='number'?predicate:api.getState().dialog.choices.findIndex(predicate);assert(index>=0);const code=`${codePrefix}${index+1}`;key(code,'Process',{isComposing:true});if(release)up(code,'Process');return code;}
@@ -101,6 +101,33 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,reducedMotion=fa
     for(const code of ['Enter','NumpadEnter','Space']){
       const h=harness(logic,{contextual:true});h.open(true);h.choice(c=>!c.good);h.tap('Escape');assert.equal(h.state().status,'paused');
       const event=h.key(code,code,{target:h.ids.resumeButton});assert.equal(event.prevented,0);if(code==='Space')h.up(code);h.ids.resumeButton.click({detail:0});if(code!=='Space')h.up(code);assert.equal(h.state().status,'playing');assert(h.state().recovery);
+    }
+  });
+  test('Opening service demo is centered, freezes real resources and demonstrates waiting and background delivery',()=>{
+    const storage={},h=harness(logic,{contextual:true,storage});h.ids.startButton.click({detail:1});
+    assert.equal(h.state().lesson.id,'serviceIntro');assert(!h.ids.lessonOverlay.hidden);assert(h.ids.gameSurface.inert);
+    h.step(200);assert.equal(h.state().elapsed,0);assert.equal(h.state().handoffTokens,1);
+    h.ids.demoWait.click({detail:1});assert.equal(h.ids.demoPatience.value,17);h.ids.demoHandoff.click({detail:1});h.ids.demoSafety.click({detail:1});h.step(180);
+    const phase=h.ids.demoStatus.textContent;h.tap('Escape');h.step(300);assert.equal(h.ids.demoStatus.textContent,phase);h.ids.resumeButton.click({detail:1});h.step(600);
+    assert(h.ids.demoDeliver.classList.contains('active'));assert.equal(h.state().elapsed,0);assert.equal(h.state().handoffTokens,1);assert.equal(h.state().handoffJob,null);
+    h.ids.lessonContinue.click({detail:1});assert.equal(h.state().lesson,null);assert(!h.ids.gameSurface.inert);assert(JSON.parse(storage['cabin3d-lessons-v2']).includes('serviceIntro'));
+  });
+  test('Demo keyboard repeats cannot skip steps and focus always lands on an enabled control',()=>{
+    for(const code of ['Enter','NumpadEnter']){
+      const h=harness(logic,{contextual:true});h.ids.startButton.click({detail:1});h.ids.demoWait.focus();h.key(code);h.ids.demoWait.click({detail:0});
+      assert.equal(h.document.activeElement,h.ids.demoSafety);const repeated=h.key(code,code,{repeat:true});assert(repeated.prevented>0);
+      h.ids.demoSafety.click({detail:0});assert.equal(h.ids.demoSafety.disabled,false,'held Enter must not activate next control');h.up(code);
+      h.key(code);h.ids.demoSafety.click({detail:0});h.up(code);assert.equal(h.document.activeElement,h.ids.demoHandoff);
+      h.key(code);h.ids.demoHandoff.click({detail:0});h.up(code);assert(h.ids.demoSafety.disabled,'completed safety step stays complete');assert.equal(h.document.activeElement,h.ids.lessonContinue);assert(!h.document.activeElement.disabled);
+    }
+  });
+  test('Escort accepts real direction keys, hides loading and can cancel from pause without clearing the hazard',()=>{
+    for(const cancel of [true,false]){
+      const h=harness(logic,{contextual:true});h.begin(true);const s=h.state(),t=s.tasks.find(t=>t.id==='water');s.lessonSeen=['aisle','serviceIntro'];s.tasks.forEach(t=>t.patience=999);s.hazards=[{id:'hazard-water',taskId:t.id,row:t.row,x:0,z:t.z,done:false}];s.player.x=0;s.player.z=t.z-.9;h.step();h.tap('Space');assert(s.action.escort);assert(h.ids.actionBox.hidden);assert(h.ids.interactButton.hidden);
+      h.step(100);assert(!s.hazards[0].done);
+      if(cancel){h.tap('Escape');assert(!h.ids.cancelEscortButton.hidden);h.ids.cancelEscortButton.click({detail:1});assert.equal(s.action,null);assert(!s.hazards[0].done);assert.equal(h.document.activeElement,h.ids.resumeButton);continue;}
+      const goal=s.action.escort.goal;let guard=0;while(s.action&&guard++<200){const dx=goal.x-s.player.x,dz=goal.z-s.player.z;const x=dx>.03?'ArrowLeft':dx<-.03?'ArrowRight':null,z=dz>.03?'ArrowUp':dz<-.03?'ArrowDown':null;if(x)h.key(x);if(z)h.key(z);h.step();if(x)h.up(x);if(z)h.up(z);}
+      assert(guard<200);assert(s.hazards[0].done);assert.equal(s.tasks.find(t=>t.id==='water').done,false);
     }
   });
   test('Aisle warning persists until every obstruction is cleared and points in screen directions',()=>{

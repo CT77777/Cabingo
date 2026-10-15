@@ -237,7 +237,7 @@ test('all six choice permutations occur and replaying a seed repeats orders',()=
   const a=fresh(37),b=fresh(37);openTask(a,'bag');openTask(b,'bag');assert.deepEqual(a.dialog,b.dialog);
 });
 test('every safety variant states its observable clue and has one appropriate action',()=>{
-  const expected={bag:[['空位','stow'],['已滿','relocate'],['已收妥','check']],
+  const expected={bag:[['空位','stow'],['已滿','stow'],['已收妥','check']],
     belt:[['手機','attention'],['圖示','diagram'],['扣好','check']],
     tray:[['清空','fold'],['咖啡','assist'],['收妥','check']]};
   const seen={bag:new Set(),belt:new Set(),tray:new Set()};
@@ -309,21 +309,17 @@ test('handoff takes 3 seconds then 12 background seconds and provides reduced cr
   assert.equal(task(s,'water').handoff,true);assert.equal(s.handoffJob,null);assert.equal(s.handoffTokens,0);
   assert.equal(s.comfort,before+3);
 });
-test('dialog reading freezes a pending handoff and used token remains visibly unavailable',()=>{
+test('dialog reading freezes a pending handoff and unavailable delegation is absent',()=>{
   const s=fresh(7);serve(s,'water','handoff');openTask(s,'blanket');const before=clone(s);
-  advance(s,50,{autoLessons:false});assert.deepEqual(s,before);const c=choices(s).find(c=>c.handoff);
-  assert.equal(c.good,false);assert(c.tags.includes('本輪還可交接 0 次'));pick(s,c=>c.handoff);finishAction(s);
-  assert.equal(s.handoffTokens,0);assert.equal(task(s,'blanket').done,false);
-  assert.equal(s.safetyErrors,0);assert.equal(s.mistakes,1);assert.equal(s.servicePenalty,9);
+  advance(s,50,{autoLessons:false});assert.deepEqual(s,before);assert(!choices(s).some(c=>c.handoff));
+  assert.equal(s.handoffTokens,0);assert.equal(task(s,'blanket').done,false);assert.equal(s.mistakes,0);
 });
 test('one wait takes 3 seconds, extends patience by 12, and does not complete service',()=>{
   const s=fresh(7),patience=task(s,'water').patience;openTask(s,'water');pick(s,c=>c.ack);
   advance(s,3-DT);assert.equal(task(s,'water').acknowledged,false);frame(s);
   assert.equal(task(s,'water').acknowledged,true);assert.equal(task(s,'water').patience,patience+12);
   assert.equal(task(s,'water').done,false);assert.equal(interact(s),true);
-  const wait=choices(s).find(c=>c.ack);assert.equal(wait.good,false);assert(wait.tags.includes('已延長過等候'));
-  pick(s,c=>c.ack);finishAction(s);assert.equal(task(s,'water').patience,patience+12);
-  assert.equal(s.safetyErrors,0);assert.equal(s.mistakes,1);assert.equal(s.servicePenalty,9);
+  assert(!choices(s).some(c=>c.ack));assert.equal(task(s,'water').patience,patience+12);assert.equal(s.mistakes,0);
 });
 test('personal service with unresolved visible baggage is a retained safety error',()=>{
   // Seed 7 places water before the solid bag, making this mistake physically reachable.
@@ -397,7 +393,7 @@ test('practice wrong choices reopen the same ordered dialog immediately with spe
     openTask(s,id);
     if(['water','blanket'].includes(id)){pick(s,c=>c.ack);finishAction(s);assert.equal(interact(s),true);}
     const initial=clone(s),dialog=s.dialog,order=choices(s).map(c=>c.id),wrongChoices=choices(s).filter(c=>!c.good);
-    assert(wrongChoices.length>0,`${id} must expose a wrong choice for practice`);
+    if(['bag','belt','tray'].includes(id))assert(wrongChoices.length>0,`${id} has a visible judgment error`);else assert(choices(s).every(c=>c.good),'unavailable service actions are never traps');
     for(const wrong of [...wrongChoices,...wrongChoices]){
       pick(s,c=>c.id===wrong.id);
       assert.equal(s.action,null,'practice correction must not create a wait action');
@@ -471,13 +467,12 @@ test('personal on-time service earns seven comfort and no safety compensation',(
   serve(s,'water');assert.equal(task(s,'water').late,false);assert.equal(s.comfort,comfort+7);assert.equal(s.safety,safety);
   assert.equal(task(s,'water').handoff,false);assert.equal(s.handoffTokens,1);
 });
-test('service correction and late penalties cap every subsequent comfort credit',()=>{
-  const s=fresh(7);serve(s,'water','ack');openTask(s,'water');pick(s,c=>c.ack);assert.equal(s.action.duration,2);finishAction(s);
-  assert.equal(s.servicePenalty,9);assert.equal(s.safetyErrors,0);
+test('late service penalties cap subsequent comfort credits',()=>{
+  const s=fresh(7);untilElapsed(s,45);assert(s.servicePenalty>=8);
   for(const t of s.tasks.filter(t=>t.kind==='safety').sort((a,b)=>a.z-b.z))if(!t.done)serve(s,t.id);
   for(const id of ['water','blanket'])serve(s,id);
   finishChapter(s);assert.equal(s.grade,'clean');assert.equal(s.safety,100);
-  assert(s.servicePenalty>=9);assert(s.comfort<=100-s.servicePenalty);assert(s.comfort<100);
+  assert(s.comfort<=100-s.servicePenalty);assert(s.comfort<100);
 });
 test('all row targets are physically reachable from either side of the center aisle',()=>{
   const encountered=new Set();

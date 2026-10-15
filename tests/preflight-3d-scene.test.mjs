@@ -76,7 +76,7 @@ try {
       assert.equal(typeof label.id,'string');assert.equal(typeof label.text,'string');assert.equal(typeof label.visible,'boolean');assert.equal(typeof label.near,'boolean');assert(Number.isFinite(label.x)&&Number.isFinite(label.y));
     }
     const ring=object('interaction-radius-1.1');assert.equal(ring.geometry.parameters.outerRadius,1.1);approx(ring.scale.x,1);approx(ring.position.x,0);approx(ring.position.z,z);
-    let rings=0;lastScene.traverse(o=>{if(o.geometry?.type==='RingGeometry')rings++;});assert.equal(rings,1,'only one interaction ring');
+    let rings=0;lastScene.traverse(o=>{if(o.geometry?.type==='RingGeometry')rings++;});assert.equal(rings,2,'one interaction ring plus distinct escort beacon');assert.equal(object('escort-beacon').visible,false);
     const bagGroup=object('objective-bag');if(previousBagGroup)assert.equal(previousBagGroup.parent,null,'old variant/row detached');previousBagGroup=bagGroup;
     lastScene.updateMatrixWorld(true);
     for(const name of ['available-bin','full-bin']){const bin=bagGroup.getObjectByName(name);if(bin){const bounds=new Box3().setFromObject(bin);assert(bounds.min.x>=-3.1&&bounds.max.x<=3.1,'bin and open door stay inside cabin');}}
@@ -124,7 +124,8 @@ try {
   const s=makeState();view.render(s,.016);assert(lastScene.children.filter(o=>o.isLight).length>=3,'lit scene');
   s.action={kind:'clear-hazard',taskId:'water',hazardId:'hazard-water',time:0,duration:5};
   assert.equal(view.render(s,.016).selectedId,'hazard-water');approx(object('interaction-radius-1.1').position.z,4.2);
-  s.action=null;s.hazards[0].done=true;view.render(s,.016);assert.equal(object('standing-hazard-water').visible,false);
+  s.player.z=3.4;for(let i=0;i<60;i++)view.render(s,.016);s.action.escort={goal:{x:.43,z:3.4},walked:0,initialDistance:.8};const escortLabels=view.render(s,.016).labels;assert(object('escort-beacon').visible);assert(escortLabels.some(l=>l.id==='escort-goal'&&l.visible));
+  s.action=null;s.hazards[0].done=true;s.hazards[0].returnedAt=10;s.elapsed=10.3;view.render(s,.016);assert(object('standing-hazard-water').visible);assert(Math.abs(object('standing-hazard-water').position.x)>.1);s.elapsed=11;view.render(s,.016);assert.equal(object('standing-hazard-water').visible,false);
   // Freeze walking pose even if a caller accidentally changes its step counter.
   s.player.walking=true;s.player.step=1;view.render(s,.016);
   const crew=object('player'),body=crew.children[0],bodyY=body.position.y;
@@ -158,7 +159,7 @@ try {
   view.render(closeup,.016);const fadeMaterial=object('available-bin').children.find(o=>o.material).material;assert(fadeMaterial.version>0,'fade invalidates opaque shader');const fadeVersion=fadeMaterial.version;view.render(closeup,.016);assert.equal(fadeMaterial.version,fadeVersion,'do not invalidate shader every frame');assert(object('available-bin').children.some(o=>o.material?.opacity<1),'bin fades in safety closeup');
   view.render(makeState(),.016);assert(object('available-bin').children.filter(o=>o.material).every(o=>o.material.opacity===1),'bin opacity restores after closeup');
   const deliveryState=makeState();deliveryState.action={id:77,kind:'task',taskId:'water',time:4,duration:8,choice:{id:'serve'}};
-  deliveryState.action.time=0;view.render(deliveryState,.016);assert(object('service-trolley').visible);assert(object('galley-supply').visible);const initialCup=object('delivery-water');approx(initialCup.position.x,.5,'item begins at trolley');approx(initialCup.position.z,deliveryState.player.z-.6,'item begins inside source beside player');deliveryState.action.time=4;
+  deliveryState.action.time=0;view.render(deliveryState,.016);assert(object('service-trolley').visible);assert(object('galley-supply').visible);const initialCup=object('delivery-water');approx(initialCup.position.x,object('service-trolley').position.x,'item begins at trolley');approx(initialCup.position.z,object('service-trolley').position.z,'item begins inside source beside player');deliveryState.action.time=4;
   view.render(deliveryState,.016);const cup=object('delivery-water');assert(cup.visible);const cupAt=cup.position.clone();
   deliveryState.status='paused';view.render(deliveryState,1);assert(cup.position.equals(cupAt));
   deliveryState.status='playing';deliveryState.action=null;deliveryState.tasks.find(t=>t.id==='water').done=true;view.render(deliveryState,.016);assert(cup.visible);approx(cup.position.x,1.25);
