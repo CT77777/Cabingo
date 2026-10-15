@@ -1,13 +1,13 @@
-import {CODEX_STORAGE_KEY,parseCodex,unlockEncounters,prepareCodexSave,resultJudgments} from './learning.mjs?v=0.7.0';
-import {KNOWLEDGE} from './knowledge/index.mjs?v=0.7.0';
-import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents,actionInput,ackRecovery} from './preflight.mjs?v=0.7.0';
-import {BOARDING_TUTORIAL,boardingEvidence} from './boarding.mjs?v=0.7.0';
-import {layoutLabels,crossedMilestones,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.7.0';
-import {createCabinAudio} from './audio.mjs?v=0.7.0';
-import {summarizeResult,parseBest,selectBest} from './results.mjs?v=0.7.0';
-import {CHAPTERS,DEFAULT_CHAPTER_ID,getChapter,formatChapterLabel} from './chapters/index.mjs?v=0.7.0';
-import {CAMPAIGN_STORAGE_KEY,parseCampaign,recordChapterResult,selectCampaignChapter,updateCharacterMemory,prepareCampaignSave} from './campaign.mjs?v=0.7.0';
-import {joystickVector,countdownPresentation} from './interaction.mjs?v=0.7.0';
+import {CODEX_STORAGE_KEY,parseCodex,awardChapterCards,canAwardChapterCards,newlyEarnedCards,prepareCodexSave,resultJudgments} from './learning.mjs?v=0.7.1';
+import {KNOWLEDGE} from './knowledge/index.mjs?v=0.7.1';
+import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents,actionInput,ackRecovery} from './preflight.mjs?v=0.7.1';
+import {BOARDING_TUTORIAL,boardingEvidence} from './boarding.mjs?v=0.7.1';
+import {layoutLabels,crossedMilestones,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.7.1';
+import {createCabinAudio} from './audio.mjs?v=0.7.1';
+import {summarizeResult,parseBest,selectBest} from './results.mjs?v=0.7.1';
+import {CHAPTERS,DEFAULT_CHAPTER_ID,getChapter,formatChapterLabel} from './chapters/index.mjs?v=0.7.1';
+import {CAMPAIGN_STORAGE_KEY,parseCampaign,recordChapterResult,selectCampaignChapter,updateCharacterMemory,prepareCampaignSave} from './campaign.mjs?v=0.7.1';
+import {joystickVector,countdownPresentation} from './interaction.mjs?v=0.7.1';
 const $=id=>document.getElementById(id),canvas=$('sceneCanvas');
 const resumeBlockedKeys=new Set(),keys=new Set(),touch=new Set(),held=new Set(),choiceBlockedKeys=new Set(),labelElements=new Map();
 const motion=matchMedia('(prefers-reduced-motion: reduce)'),phone=matchMedia('(max-width: 700px)');
@@ -20,7 +20,7 @@ try{best=parseBest(localStorage.getItem('cabin3d-best-v1'));}catch{}
 let campaign,chapterMenuSignature='',campaignStorageAvailable=true;
 try{campaign=parseCampaign(localStorage.getItem(CAMPAIGN_STORAGE_KEY),{legacyBest:best,legacyCampaign:localStorage.getItem('cabin3d-campaign-v1')});}catch{campaign=parseCampaign(null,{legacyBest:best});campaignStorageAvailable=false;}
 const codexExitKeys=new Set();
-let codex, codexCanSave=true,codexOpen=false,codexReturn=null,learningSeen='',learningResultRun=null;
+let codex, codexCanSave=true,codexOpen=false,codexReturn=null,learningAwardRun=null,newRewards=[],learningResultRun=null;
 try{const raw=localStorage.getItem(CODEX_STORAGE_KEY);codex=parseCodex(raw);codexCanSave=prepareCodexSave(raw,codex).raw!==null;}catch{codex=parseCodex(null);codexCanSave=false;}
 state=createState({chapterId:campaign.currentChapterId,characterMemory:campaign.characterMemory,handsOn:true,contextual:true,seed:Math.floor(Math.random()*1e9)});state.reducedMotion=motion.matches;
 let lastAudibleVolume=audioPrefs.volume>0?audioPrefs.volume:.4;
@@ -72,12 +72,28 @@ function panelName(){if(!ready)return state.status==='briefing'?'brief':'error';
 function rememberLessons(){rememberedLessons=[...new Set([...rememberedLessons,...state.lessonSeen])];try{localStorage.setItem('cabin3d-lessons-v2',JSON.stringify(rememberedLessons));}catch{}}
 function codexUnlockedCount(){return KNOWLEDGE.filter(c=>codex.unlockedIds.includes(c.id)).length;}
 function captureLearning(){
- const signature=state.runId+':'+state.encounters.join(',');if(signature===learningSeen)return;learningSeen=signature;
- const next=unlockEncounters(codex,state);if(next.unlockedIds.join()!==codex.unlockedIds.join()){
-  codex=next;if(codexCanSave)try{const saved=prepareCodexSave(localStorage.getItem(CODEX_STORAGE_KEY),codex);codex=saved.codex;if(saved.raw===null)codexCanSave=false;else localStorage.setItem(CODEX_STORAGE_KEY,saved.raw);}catch{codexCanSave=false;}
+ if(state.status==='finished'&&learningAwardRun!==state.runId){
+  learningAwardRun=state.runId;newRewards=[];
+  // Refresh the collection before comparing rewards, including cards earned in another tab.
+  if(codexCanSave)try{const merged=prepareCodexSave(localStorage.getItem(CODEX_STORAGE_KEY),codex);codex=merged.codex;if(merged.raw===null)codexCanSave=false;}catch{codexCanSave=false;}
+  const next=awardChapterCards(codex,state);newRewards=newlyEarnedCards(codex,next);codex=next;
+  if(newRewards.length&&codexCanSave)try{const saved=prepareCodexSave(localStorage.getItem(CODEX_STORAGE_KEY),codex);codex=saved.codex;if(saved.raw===null)codexCanSave=false;else localStorage.setItem(CODEX_STORAGE_KEY,saved.raw);}catch{codexCanSave=false;}
  }
  text('codexCount',`${codexUnlockedCount()} / ${KNOWLEDGE.length}`);
 }
+function collectionFace(card,locked=false){
+ const face=document.createElement('div');face.className='flight-card-face';
+ const art=document.createElement('div'),img=document.createElement('img'),serial=document.createElement('span');art.className='flight-card-art';img.setAttribute('src',card.art+'?v=0.7.1');img.setAttribute('alt','');img.setAttribute('width','640');img.setAttribute('height','360');img.setAttribute('loading','lazy');serial.className='flight-card-number';serial.textContent=`NO. ${card.serial}`;art.append(img,serial);
+ const copy=document.createElement('div'),kicker=document.createElement('small'),title=document.createElement('h3'),fact=document.createElement('p'),stamp=document.createElement('small');copy.className='flight-card-copy';kicker.className='flight-card-kicker';kicker.textContent=card.kicker;title.textContent=card.collectibleTitle;fact.textContent=locked?`在${card.chapters.map(id=>formatChapterLabel(getChapter(id))).join('或')}${card.unlockLabel}，正式通關後獲得。`:card.fact;stamp.className='flight-card-stamp';stamp.textContent=locked?'等待收藏':newRewards.some(c=>c.id===card.id)?'通關獎勵 · 已收藏':'飛行收藏 · 已收藏';copy.append(kicker,title,fact,stamp);if(!locked){const review=document.createElement('small');review.className='flight-card-review';review.textContent='知識草稿 · 待專業審閱';copy.append(review);}face.append(art,copy);return face;
+}
+function renderCardRewards(){
+ hide('cardRewards',!newRewards.length);$('resultCard').setAttribute('aria-describedby',newRewards.length?'rewardSummary cardRewardHint':'cardRewardHint');text('rewardSummary',`本次獲得 ${newRewards.length} 張收藏卡`);
+ text('cardRewardHint',newRewards.length?'卡片已放進飛行收藏冊。':state.practice?'練習不發卡；完成任務並正式通關後，就能收藏。':canAwardChapterCards(state)?'這次完成任務的卡片都已收藏。':'完成任務並成功通關後，就能獲得收藏卡。');
+ $('rewardCards').replaceChildren(...newRewards.map(card=>{
+  const button=document.createElement('button'),img=document.createElement('img'),copy=document.createElement('span'),serial=document.createElement('small'),title=document.createElement('b');button.className='reward-card';img.setAttribute('src',card.art+'?v=0.7.1');img.setAttribute('alt','');img.setAttribute('width','640');img.setAttribute('height','360');serial.textContent=`NEW / ${card.serial}`;title.textContent=card.collectibleTitle;copy.append(serial,title);button.append(img,copy);button.addEventListener('click',()=>openCodex(button,card.id));return button;
+ }));
+}
+
 function knowledgeContent(card){
  const content=document.createElement('div');content.className='knowledge-copy';
  const body=document.createElement('p'),badge=document.createElement('small'),origin=document.createElement('small');
@@ -88,7 +104,7 @@ function knowledgeContent(card){
  return content;
 }
 function renderLearningResult(){
- if(learningResultRun===state.runId)return;learningResultRun=state.runId;$('reviewDetails').open=false;
+ if(learningResultRun===state.runId)return;learningResultRun=state.runId;$('reviewDetails').open=false;renderCardRewards();
  const rows=resultJudgments(state);text('reviewSummary',`為什麼這樣判斷？ · ${rows.length} 題`);
  $('judgmentList').replaceChildren(...rows.map(j=>{
   const row=document.createElement('details'),summary=document.createElement('summary'),context=document.createElement('p'),choice=document.createElement('p');row.className='judgment';
@@ -98,17 +114,20 @@ function renderLearningResult(){
  }));
  if(!rows.length){const empty=document.createElement('p');empty.textContent='這局還沒有選擇回應。下次靠近旅客，觀察後再選擇。';$('judgmentList').append(empty);}
 }
-function openCodex(trigger){
- if(codexOpen||codexExitKeys.size||!['briefing','finished'].includes(state.status))return;codexOpen=true;codexReturn=trigger;releaseAll();captureLearning();
- text('codexProgress',`已解鎖 ${codexUnlockedCount()} / ${KNOWLEDGE.length}`);text('codexStorage',codexCanSave?'圖鑑保存在這個瀏覽器。':'目前僅在本次遊戲保留；既有或新版資料不會被覆寫。');
+function openCodex(trigger,selectedCardId=null){
+ if(codexOpen||codexExitKeys.size||!['briefing','finished'].includes(state.status))return;codexOpen=true;codexReturn=trigger;releaseAll();captureLearning();let selectedEntry=null;
+ text('codexProgress',`已收藏 ${codexUnlockedCount()} / ${KNOWLEDGE.length}`);text('codexStorage',codexCanSave?'收藏保存在這個瀏覽器。':'目前僅在本次遊戲保留；既有或新版資料不會被覆寫。');
  $('codexContent').replaceChildren(...[...new Set(KNOWLEDGE.map(c=>c.category))].map(category=>{
-  const group=document.createElement('section'),heading=document.createElement('h3');heading.textContent=category;group.append(heading);
-  for(const card of KNOWLEDGE.filter(c=>c.category===category)){const unlocked=codex.unlockedIds.includes(card.id),entry=document.createElement(unlocked?'details':'article'),title=document.createElement(unlocked?'summary':'p');entry.className=unlocked?'knowledge-card':'knowledge-card locked';title.textContent=card.title;entry.append(title);
-   if(unlocked)entry.append(knowledgeContent(card));else{const hint=document.createElement('small');hint.textContent=`尚未解鎖 · 在${card.chapters.map(id=>formatChapterLabel(getChapter(id))).join('、')}打開相關情境。`;entry.append(hint);}group.append(entry);
+  const group=document.createElement('section'),heading=document.createElement('h3'),shelf=document.createElement('div');heading.textContent=category;shelf.className='collection-grid';group.append(heading,shelf);
+  for(const card of KNOWLEDGE.filter(c=>c.category===category)){
+   const unlocked=codex.unlockedIds.includes(card.id),entry=document.createElement('article');entry.className=unlocked?'collection-card':'collection-card locked';entry.append(collectionFace(card,!unlocked));
+   if(unlocked){const reference=document.createElement('details'),summary=document.createElement('summary'),sources=document.createElement('div');reference.className='card-reference';summary.textContent='小知識來源與任務解說';summary.setAttribute('aria-label',`${card.collectibleTitle}：小知識來源與任務解說`);sources.className='fact-sources';const label=document.createElement('small');label.textContent='小知識參考資料';sources.append(label);for(const source of card.factSources){const link=document.createElement('a');link.textContent=source.label;link.setAttribute('href',source.url);link.setAttribute('target','_blank');link.setAttribute('rel','noopener noreferrer');sources.append(link);}reference.append(summary,sources,knowledgeContent(card));entry.append(reference);}
+   if(card.id===selectedCardId&&unlocked){selectedEntry=entry;entry.className+=' just-earned';}shelf.append(entry);
   }return group;
  }));
- hide('codexOverlay',false);$('gameSurface').inert=true;$('closeCodex').focus({preventScroll:true});
+ hide('codexOverlay',false);$('gameSurface').inert=true;(selectedEntry?.querySelector('summary')||$('closeCodex')).focus({preventScroll:true});selectedEntry?.scrollIntoView({block:'start'});
 }
+
 function codexControls(){return [...$('codexOverlay').querySelectorAll('button,summary,a')].filter(el=>{
  if(el.disabled||!el.getClientRects().length)return false;
  // Closed details can retain layout rectangles for their skipped content.
@@ -177,7 +196,7 @@ function refresh(force=false){captureLearning();const c=counts(state),totalSafet
  if(panel!==panelPrevious||panel==='pause'&&pauseReason==='focus'&&document.activeElement!==$('awayResumeButton')){actionPointer=null;clearMovement();if(panel==='lesson'){lessonArmed=held.size===0;suppressInheritedLessonClick=held.has('Space')||held.has('Enter')||held.has('NumpadEnter');focusPanel('lessonCard');}else if(panel==='recovery')$('recoveryTitle').focus({preventScroll:true});else if(panel==='decision')focusPanel('decisionCard');else if(panel==='pause')$(pauseReason==='focus'?'awayResumeButton':'resumeButton').focus({preventScroll:true});else if(panel==='result')focusPanel('resultCard');else if(panel==='idle'&&panelPrevious&&panelPrevious!=='brief')focusScene();panelPrevious=panel;}
 }
 function begin(practice=false){if(codexOpen||!ready||state.status!=='briefing')return;unlockAudio();audio.reset(state.runId);state.practice=practice;start(state);releaseAll();refresh(true);focusScene();}
-function fresh(practice=state.practice,autostart=true){if(codexOpen||!ready)return;$('reviewDetails').open=false;pauseReason='manual';pauseReturn='playing';infoOpen=false;$('pauseOptions').open=false;suppressAwayClick=false;resumeBlockedKeys.clear();const camera=state.cameraMode;state=createState({chapterId:campaign.currentChapterId,characterMemory:campaign.characterMemory,handsOn:true,contextual:true,practice,seed:Math.floor(Math.random()*1e9)});state.cameraMode=camera;state.reducedMotion=motion.matches;state.lessonSeen=rememberedLessons.filter(x=>getChapter(state.chapterId).tutorial.includes(x));dialogSignature='';suppressInheritedChoiceClick=false;releaseAll();audio.reset(state.runId);audioCursor=null;previousAction=null;if(autostart){unlockAudio();start(state);}refresh(true);if(autostart)focusScene();}
+function fresh(practice=state.practice,autostart=true){if(codexOpen||!ready)return;newRewards=[];$('rewardCards').replaceChildren();$('reviewDetails').open=false;pauseReason='manual';pauseReturn='playing';infoOpen=false;$('pauseOptions').open=false;suppressAwayClick=false;resumeBlockedKeys.clear();const camera=state.cameraMode;state=createState({chapterId:campaign.currentChapterId,characterMemory:campaign.characterMemory,handsOn:true,contextual:true,practice,seed:Math.floor(Math.random()*1e9)});state.cameraMode=camera;state.reducedMotion=motion.matches;state.lessonSeen=rememberedLessons.filter(x=>getChapter(state.chapterId).tutorial.includes(x));dialogSignature='';suppressInheritedChoiceClick=false;releaseAll();audio.reset(state.runId);audioCursor=null;previousAction=null;if(autostart){unlockAudio();start(state);}refresh(true);if(autostart)focusScene();}
 function performInteraction(){if(state.recovery)return;if(!ready||state.near==='report'&&!chapterReady(state))return;if(state.action?.interaction){actionInput(state,state.action.interaction.held?'release':'press');refresh(true);return;}clearMovement();if(interact(state)&&state.dialog){choiceBlockedKeys.clear();suppressInheritedChoiceClick=held.has('Space');}refresh(true);}
 function selectChoice(index,event={}){
  if(state.recovery)return;if(!ready||(event.code?choiceBlockedKeys.has(event.code):!event.detail&&suppressInheritedChoiceClick)||!choose(state,index))return;
@@ -274,6 +293,6 @@ function updateLabels(labels){
  }for(const [id,e] of labelElements)if(!active.has(id))e.hidden=true;
 }
 function frame(time){if(state.dialog&&![...held].some(c=>['Space','Enter','NumpadEnter'].includes(c)))suppressInheritedChoiceClick=false;const dt=Math.min(Math.max((time-last)/1000,0),.05);last=time;if(ready&&view){const wasAction=state.action,heldDir=d=>keys.has(d)||touch.has(d);tick(state,dt,screenInputToWorld(Number(heldDir('right'))-Number(heldDir('left'))+stick.x,Number(heldDir('up'))-Number(heldDir('down'))-stick.y));if(wasAction&&!state.action)clearMovement();state.renderTargets=targets(state).filter(t=>t.id!=='report'||chapterReady(state));try{const visual=view.render(state,dt);updateSpeech(visual?.speaker);updateLabels(visual?.labels||[]);}catch(error){fail(error);}if(ready){syncPresentation();if(state.action){$('recoveryProgress').value=state.action.time;$('actionBar').style.width=`${100*state.action.time/state.action.duration}%`;if(state.action.interaction)$('holdFill').style.width=`${Math.min(100,state.action.interaction.fill/1.2*100)}%`;}refresh();}}requestAnimationFrame(frame);}
-async function boot(){try{const {createCabinView}=await import('./scene.js?v=0.7.0');view=createCabinView(canvas,{onContextLost:()=>fail(new Error('WebGL context lost'))});ready=true;hide('loading',true);$('startButton').disabled=false;$('practiceButton').disabled=false;text('startButton',state.boarding?'開始正式登機 →':'開始正式巡艙 →');refresh(true);requestAnimationFrame(frame);}catch(error){fail(error);}}
+async function boot(){try{const {createCabinView}=await import('./scene.js?v=0.7.1');view=createCabinView(canvas,{onContextLost:()=>fail(new Error('WebGL context lost'))});ready=true;hide('loading',true);$('startButton').disabled=false;$('practiceButton').disabled=false;text('startButton',state.boarding?'開始正式登機 →':'開始正式巡艙 →');refresh(true);requestAnimationFrame(frame);}catch(error){fail(error);}}
 $('nextChapterButton').addEventListener('click',()=>{const next=CHAPTERS.find(c=>c.order===state.chapter+1);if(state.status!=='finished'||state.practice||!summarizeResult(state).record||!next?.available||!campaign.unlockedChapterIds.includes(next.id))return;campaign=selectCampaignChapter(campaign,next.id);saveCampaign();fresh(false,false);});
 refresh(true);boot();

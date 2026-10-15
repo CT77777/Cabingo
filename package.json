@@ -1,6 +1,6 @@
 {
   "name": "cabingo",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "description": "Cabingo 3D boarding tutorial and preflight browser game",
   "engines": {

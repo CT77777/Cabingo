@@ -1,5 +1,5 @@
-import {initBoarding,tickBoarding,boardingChoices,boardingPassable,boardingTaskComplete,boardingReady,boardingTaskActor} from './boarding.mjs?v=0.7.0';
-import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=0.7.0';
+import {initBoarding,tickBoarding,boardingChoices,boardingPassable,boardingTaskComplete,boardingReady,boardingTaskActor} from './boarding.mjs?v=0.7.1';
+import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=0.7.1';
 // Pure, deterministic preflight game state. This is a fictional game,
 // not aviation training or a representation of real operating procedures.
 export const WORLD = Object.freeze({
