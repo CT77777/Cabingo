@@ -399,3 +399,18 @@ body[data-panel=decision][data-decision-kind=safety] .scene-badge { display:none
  .aisle-alert strong { font-size:12px; }
 }
 @media (max-width:700px) { .aisle-alert p { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .aisle-alert>div { min-width:0; } }
+
+/* Both pause reasons share the same centered, blurred modal surface. */
+.pause-card .music-control { margin:14px 0; text-align:left; }
+.pause-card #rulesPanel { text-align:left; }
+.pause-card .rules { max-height: min(240px,35dvh); overflow:auto; }
+.pause-options { margin-top:18px; border-top:1px solid #b7dfcc26; padding-top:12px; text-align:left; }
+.pause-options summary { cursor:pointer; color:#b5cec4; font-size:12px; text-align:center; padding:6px; }
+.pause-options .button-row { margin-top:12px; }
+.pause-options .button-row button { width:auto; font-size:12px; }
+
+.pause-card .rules p { font-size:12px; line-height:1.6; margin:0 0 10px; }
+.pause-options .volume-control { display:flex; margin-top:12px; width:100%; }
+.pause-options .speaker-button { width:44px; }
+#pauseVolumeSlider { width:100%; min-width:0; accent-color:var(--mint); }
+.volume-control[data-muted=true] #pauseVolumeWaves, .volume-control[data-muted=false] #pauseMuteSlash { display:none; }
