@@ -435,6 +435,9 @@ export function createCabinView(canvas, { onContextLost } = {}) {
   canvas.addEventListener('webglcontextlost',contextLost,false);
   function render(state, dt = 0) {
     if (disposed) return {labels:[]}; resize();
+    // Boarding keeps the aisle clear of the movable service cart and supply cart.
+    const showServiceProps=!state.boarding&&state.chapterId!=='boarding';
+    trolley.visible=showServiceProps;galleyDrawer.visible=showServiceProps;
     const player = state.player || {x:0,z:1.5,angle:0,walking:false,step:0};
     const playing = state.status === 'playing' && !state.dialog && !state.lesson, reducedMotion = Boolean(state.reducedMotion);
     for(const halo of halos.values())halo.visible=false;
