@@ -1,4 +1,5 @@
-import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=0.5.1';
+import {initBoarding,tickBoarding,boardingChoices,boardingPassable,boardingTaskComplete,boardingReady,boardingTaskActor} from './boarding.mjs?v=0.6.0-m1-r7';
+import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=0.6.0-m1-r7';
 // Pure, deterministic preflight game state. This is a fictional game,
 // not aviation training or a representation of real operating procedures.
 export const WORLD = Object.freeze({
@@ -65,10 +66,10 @@ export function createState(options = {}) {
   seed = Number.isFinite(seed) ? seed >>> 0 : 1701;
   const random = rng(seed), rows = shuffle([0, 1, 2, 3, 4, 5], random);
   const tasks = chapter.tasks.map((d, i) => {
-    const row = rows[i], side = random() > .5 ? 'left' : 'right';
+    const row = d.row ?? rows[i], side = d.side ?? (random() > .5 ? 'left' : 'right');
     return {
-      ...d, row, side, seat: `${row + 1}${side === 'left' ? 'B' : 'C'}`,
-      variant: Math.floor(random() * 3), x: 0, z: WORLD.rows[row],
+      ...d, characterId:d.characterId||(d.id==='belt'?'elder':null), row, side, seat: `${row + 1}${side === 'left' ? 'B' : 'C'}`,
+      variant: d.variant ?? Math.floor(random() * 3), x: 0, z: WORLD.rows[row],
       spawn: d.spawn ?? 0, active: d.kind === 'safety' || d.spawn === 0,
       done: false, assigned: false, late: false, acknowledged: false,
       handoff: false, warned: false, mistakes: 0
@@ -77,6 +78,7 @@ export function createState(options = {}) {
   const s = {
     runId: `run-${++runSerial}`, eventSeq:0, events:[], actionSerial:0,
     chapter: chapter.order, chapterId: chapter.id, seed, handsOn: !!handsOn, contextual: !!contextual, practice: !!practice, status: 'briefing', elapsed: 0, duration: chapter.duration,
+    characterMemory:options?.characterMemory&&typeof options.characterMemory==='object'?options.characterMemory:{},
     cameraMode: 'follow', reducedMotion: false,
     player: { x: 0, z: 1.5, angle: 0, walking: false, step: 0 },
     tasks, hazards: [], hazardsCleared: 0, handoffTokens: chapter.handoffTokens, handoffJob: null,
@@ -86,6 +88,7 @@ export function createState(options = {}) {
     feedbackKind: 'normal', near: null, completed: 0, grade: null, result: null,
     endReason: null, reportAttempted: false
   };
+  if(chapterId==='boarding')initBoarding(s);
   updateNear(s);
   return s;
 }
@@ -107,23 +110,24 @@ export function counts(s) {
   };
 }
 export function chapterReady(s) {
+  if(s.boarding)return boardingReady(s);
   const c = counts(s);
   return s.tasks.every(t=>t.done) && c.hazards === 0;
 }
 export function targets(s) {
   return [
     ...s.hazards.filter(h => !h.done).map(h => ({ id: h.id, taskId:h.taskId, x: 0, z: h.z, kind: 'hazard', label: `恢復走道`, active: true, done: false })),
-    ...s.tasks.filter(t => t.active && !t.done && !t.assigned).map(t => ({ id: t.id, x: 0, z: t.z, kind: t.kind, label: `${t.title}`, active: true, done: false })),
+    ...s.tasks.filter(t => t.active && !t.done && !t.assigned&&(!s.boarding||(['guide','bag'].includes(t.id)||s.boarding.formal)&&boardingTaskActor(s,t.id)&&(t.id!=='seat'||s.boarding.actors.filter(a=>a.taskId==='seat').every(a=>a.status==='waiting')))).map(t => {const a=s.boarding&&t.id!=='bag'?boardingTaskActor(s,t.id):null;return { id: t.id, x:a?.x||0, z:a?.z??t.z, kind: t.kind, label: `${t.title}`, active: true, done: false };}),
     { id: 'report', ...WORLD.reportPoint, kind: 'report', label: '前方巡艙回報', active: true, done: s.status === 'finished' && s.endReason === 'complete' }
   ];
 }
 export function updateNear(s) {
   const options = targets(s), range = WORLD.interactionRadius;
   // An aisle event takes priority even when a seat target is slightly nearer.
-  for (const group of ['hazard', 'task', 'report']) {
+  for (const group of (s.boarding?['hazard','safety','service','report']:['hazard', 'task', 'report'])) {
     let best = null, distance = range;
     for (const t of options) {
-      if (t.done || (group === 'hazard' ? t.kind !== 'hazard' : group === 'report' ? t.kind !== 'report' : t.kind === 'hazard' || t.kind === 'report')) continue;
+      if(t.done||(group==='task'?t.kind==='hazard'||t.kind==='report':t.kind!==group))continue;
       const d = Math.hypot(s.player.x - t.x, s.player.z - t.z);
       if (d <= distance) { best = t.id; distance = d; }
     }
@@ -146,6 +150,7 @@ export function canStand(s, x, z) {
     for (const [minX, maxX] of [[-2.7, -.78], [.78, 2.7]])
       if (rectBlocked(x, z, minX, maxX, minZ, maxZ)) return false;
   }
+  if(s.boarding&&!boardingPassable(s,x,z))return false;
   const bag = s.tasks.find(t => t.id === 'bag');
   if (bag && !bag.done && bag.variant !== 2 && rectBlocked(x, z, -.44, .44, bag.z - .36, bag.z + .36)) return false;
   for (const h of s.hazards) {
@@ -177,6 +182,7 @@ export function move(s, dx, dz, dt) {
 }
 
 function choicesFor(s, t) {
+  if(s.boarding&&t.id!=='bag'){const d=boardingChoices(s,t);t.quote=d.quote;t.description=d.description;return {id:t.id,title:t.title,...d,choices:shuffle(d.choices,rng(s.seed+s.decisionSerial++*97))};}
   const v = t.variant;
   const mk = (id, label, good, duration = 5, extra = {}) => ({ id, label, good, duration, tags: [`${duration}秒`], ...extra });
   const repaired = '確認完成，繼續巡艙。';
@@ -189,6 +195,7 @@ function choicesFor(s, t) {
   } else if (t.id === 'belt') {
     quote = ['嗯？你剛剛說什麼？', '這個圖示是什麼意思？', '這樣可以了嗎？'][v];
     description = ['旅客盯著手機，安全帶尚未扣好。', '旅客指著圖示，安全帶尚未扣好。', '旅客已扣好安全帶，等你查看。'][v];
+    if(s.characterMemory?.elder?.helped)quote=`又見面了，謝謝你登機時幫我。${quote}`;
     choices = [mk('attention', '先請旅客抬頭，再示範扣法', v === 0), mk('diagram', '先指圖示，讓旅客照著操作', v === 1, 6), mk('check', '查看扣好的安全帶', v === 2, 4)];
     choices.forEach(c => { c.feedback = c.good ? repaired : ['旅客正看手機、還沒扣好；需要先引起注意。', '旅客指著圖示、還沒扣好；需要說明圖示。', '安全帶已扣好；現在只需查看確認。'][v]; });
   } else if (t.id === 'tray') {
@@ -233,7 +240,7 @@ export function interact(s) {
   if (s.near === 'report') {
     if (!chapterReady(s)) {
       const c = counts(s); s.reportAttempted = true;
-      feedback(s, `尚需檢查 ${3 - c.safety} 項、需求 ${s.tasks.filter(t=>t.kind==='service').length - c.service} 個、走道 ${c.hazards} 件；完成後再回報。`, 'warning'); return false;
+      feedback(s, s.boarding?`尚有 ${s.boarding.actors.filter(a=>!['seated','exited'].includes(a.status)).length} 位旅客未到位；完成所有需求、讓走道淨空後再回報。`:`尚需檢查 ${s.tasks.filter(t=>t.kind==='safety').length - c.safety} 項、需求 ${s.tasks.filter(t=>t.kind==='service').length - c.service} 個、走道 ${c.hazards} 件；完成後再回報。`, 'warning'); return false;
     }
     finish(s, 'complete'); return true;
   }
@@ -256,14 +263,14 @@ export function choose(s, index) {
   const decision = s.dialog;
   s.dialog = null; s.player.walking = false;
   if (!choice.good && s.contextual) {
-    s.recovery={taskId:t.id,copy:choice.feedback,ready:s.practice,decision};
-    if(!s.practice){t.mistakes++;s.mistakes++;if(t.kind==='safety'||choice.safetyError){s.safetyErrors++;s.safety=clamp(s.safety-20,0,100);}else penalizeService(s,9);beginAction(s,{kind:'correction',taskId:t.id,time:0,duration:2,choice});}
+    s.recovery={taskId:t.id,copy:choice.feedback,ready:s.practice||!!(s.boarding&&!s.boarding.formal),decision};
+    if(!s.practice&&!(s.boarding&&!s.boarding.formal)){t.mistakes++;s.mistakes++;if(t.kind==='safety'||choice.safetyError){s.safetyErrors++;s.safety=clamp(s.safety-20,0,100);}else penalizeService(s,9);beginAction(s,{kind:'correction',taskId:t.id,time:0,duration:2,choice});}
     feedback(s,choice.feedback,'warning');return true;
   }
   if (!choice.good) {
-    if (s.practice) {
+    if (s.practice || s.boarding&&!s.boarding.formal) {
       // Keep the same options in place; the controller requires a fresh input.
-      decision.recoveryFeedback = `${choice.feedback} 可直接重選，練習不扣分。`;
+      decision.recoveryFeedback = `${choice.feedback} 可直接重選，教學與練習不扣分。`;
       decision.retrySerial = (decision.retrySerial || 0) + 1;
       s.dialog = decision;
       feedback(s, decision.recoveryFeedback, 'warning');
@@ -326,8 +333,9 @@ function penalizeService(s, amount) {
 }
 function creditService(s, amount) { s.comfort = clamp(s.comfort + amount, 0, Math.max(0, 100 - s.servicePenalty)); }
 function completeTask(s, t, handoff = false) {
+  if(s.boarding)boardingTaskComplete(s,t);
   t.done = true; t.assigned = false; t.handoff = handoff; t.completedAt = s.elapsed; s.completed++; emit(s,'complete',t.id,{handoff});
-  if (t.kind === 'service') creditService(s, handoff ? (t.late ? 1 : 3) : (t.late ? 3 : 7));
+  if (t.kind === 'service') creditService(s, s.boarding?(t.late?3:10):handoff ? (t.late ? 1 : 3) : (t.late ? 3 : 7));
 }
 function finishAction(s) {
   const a = s.action, t = s.tasks.find(t => t.id === a.taskId);
@@ -373,13 +381,13 @@ function finish(s, reason) {
 export function tick(s, dt, input = { x: 0, z: 0 }) {
   if (s.status !== 'playing' || s.dialog || s.lesson || s.recovery?.ready || !Number.isFinite(dt) || dt <= 0) return;
   dt = Math.min(dt, .1);
-  s.elapsed = s.practice ? s.elapsed + dt : Math.min(s.duration, s.elapsed + dt);
+  if(!s.boarding||s.boarding.formal)s.elapsed = s.practice ? s.elapsed + dt : Math.min(s.duration, s.elapsed + dt);
   if(!s.practice){s.timeWarned??=[];for(const level of [30,10])if(s.duration-s.elapsed<=level&&!s.timeWarned.includes(level)){s.timeWarned.push(level);s.timeWarnedAt??={};s.timeWarnedAt[level]=s.elapsed;emit(s,'time-warning',null,{level});}}
   // Deadline evaluation deliberately precedes demand, handoff, and action credit.
   if (!s.practice && s.elapsed + EPSILON >= s.duration) {
     s.elapsed = s.duration; finish(s, 'timeout'); return;
   }
-  demandTick(s);
+  if(!s.boarding)demandTick(s);
   if (s.lesson) { updateNear(s); return; }
   if (s.handoffJob) {
     s.handoffJob.remaining = Math.max(0, s.handoffJob.remaining - dt);
@@ -398,6 +406,7 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
   for (const h of s.hazards) {
     if (h.collisionPending && !rectBlocked(s.player.x, s.player.z, -.38, .38, h.z - .34, h.z + .34)) h.collisionPending = false;
   }
+  if(s.boarding)tickBoarding(s,dt);
   updateNear(s);
 }
 

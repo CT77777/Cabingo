@@ -1,4 +1,6 @@
-import {PREFLIGHT_CHAPTER} from './preflight.mjs?v=0.5.1';
+import {PREFLIGHT_CHAPTER} from './preflight.mjs?v=0.6.0-m1-r7';
+
+import {BOARDING_CHAPTER} from './boarding.mjs?v=0.6.0-m1-r7';
 
 export const DEFAULT_CHAPTER_ID='preflight';
 const planned=(id,order,title,phase,duration)=>Object.freeze({
@@ -6,7 +8,7 @@ const planned=(id,order,title,phase,duration)=>Object.freeze({
  tasks:Object.freeze([]),lessons:Object.freeze({}),tutorial:Object.freeze([]),eventPhases:Object.freeze([])
 });
 export const CHAPTERS=Object.freeze([
- planned('boarding',1,'登機','boarding',90),
+ BOARDING_CHAPTER,
  PREFLIGHT_CHAPTER,
  planned('takeoff',3,'滑行與起飛','takeoff',60),
  planned('meal-service',4,'巡航餐飲服務','cruise',150),
