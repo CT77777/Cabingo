@@ -1,4 +1,5 @@
-// Pure, deterministic first-chapter game state. This is a fictional game,
+import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=0.5.0-m0';
+// Pure, deterministic preflight game state. This is a fictional game,
 // not aviation training or a representation of real operating procedures.
 export const WORLD = Object.freeze({
   minX: -2.77, maxX: 2.77, minZ: .45, maxZ: 15.5,
@@ -7,19 +8,6 @@ export const WORLD = Object.freeze({
   reportPoint: Object.freeze({ x: 0, z: 1.5 })
 });
 
-const DEFINITIONS = [
-  { id: 'bag', kind: 'safety', title: '行李位置待確認', icon: '!' },
-  { id: 'belt', kind: 'safety', title: '準備狀態待確認', icon: '!' },
-  { id: 'tray', kind: 'safety', title: '餐桌狀態待確認', icon: '!' },
-  { id: 'water', kind: 'service', title: '想要一杯水', icon: '水', spawn: 0, patience: 32 },
-  { id: 'blanket', kind: 'service', title: '客艙有點冷', icon: '暖', spawn: 5, patience: 39 },
-  { id: 'question', kind: 'service', title: '想知道何時出發', icon: '問', spawn: 10, patience: 46 }
-];
-const LESSONS = {
-  aisle: { title: '有人走到走道了', copy: '需求等太久會出現紅色走道事件。靠近按 E 協助返回座位，再完成原本的服務。' },
-  correction: { title: '可以補救，紀錄會保留', copy: '正式巡艙先顯示 2 秒修正回饋，再重新選擇。安全失誤 1 次保留修正評價；2 次本輪需重試，仍可練習。' },
-  handoff: { title: '這次交接用掉了', copy: '服務交接每輪只有 1 次。交接後同事需要 12 秒才送達，回饋較少；名額不會恢復，其他需求要自己安排。' }
-};
 let runSerial = 0;
 function emit(s,type,taskId=null,detail={}) {
  s.events.push({runId:s.runId,seq:++s.eventSeq,type,taskId,actionId:s.action?.id??null,detail});
@@ -63,17 +51,19 @@ function feedback(s, copy, kind = 'normal') { s.feedback = copy; s.feedbackKind 
 function showLesson(s, id) {
   if (s.lesson || s.lessonSeen.includes(id)) return false;
   actionInput(s,'cancel');
-  s.lesson = { id, ...LESSONS[id] };
+  s.lesson = { id, ...getChapter(s.chapterId||DEFAULT_CHAPTER_ID).lessons[id] };
   if (id === 'correction' && s.action?.choice?.feedback) s.lesson.copy = `${s.action.choice.feedback} ${s.lesson.copy}`;
   s.player.walking = false;
   return true;
 }
 
 export function createState(options = {}) {
-  let { seed = 1701, practice = false, handsOn = false, contextual = false } = options && typeof options === 'object' ? options : {};
+  let { seed = 1701, practice = false, handsOn = false, contextual = false, chapterId = DEFAULT_CHAPTER_ID } = options && typeof options === 'object' ? options : {};
+  const chapter=getChapter(chapterId);
+  if(!chapter?.available)throw new RangeError('此章節尚未開放');
   seed = Number.isFinite(seed) ? seed >>> 0 : 1701;
   const random = rng(seed), rows = shuffle([0, 1, 2, 3, 4, 5], random);
-  const tasks = DEFINITIONS.map((d, i) => {
+  const tasks = chapter.tasks.map((d, i) => {
     const row = rows[i], side = random() > .5 ? 'left' : 'right';
     return {
       ...d, row, side, seat: `${row + 1}${side === 'left' ? 'B' : 'C'}`,
@@ -85,10 +75,10 @@ export function createState(options = {}) {
   });
   const s = {
     runId: `run-${++runSerial}`, eventSeq:0, events:[], actionSerial:0,
-    chapter: 1, seed, handsOn: !!handsOn, contextual: !!contextual, practice: !!practice, status: 'briefing', elapsed: 0, duration: 100,
+    chapter: chapter.order, chapterId: chapter.id, seed, handsOn: !!handsOn, contextual: !!contextual, practice: !!practice, status: 'briefing', elapsed: 0, duration: chapter.duration,
     cameraMode: 'follow', reducedMotion: false,
     player: { x: 0, z: 1.5, angle: 0, walking: false, step: 0 },
-    tasks, hazards: [], hazardsCleared: 0, handoffTokens: 1, handoffJob: null,
+    tasks, hazards: [], hazardsCleared: 0, handoffTokens: chapter.handoffTokens, handoffJob: null,
     safety: 100, comfort: 80, safetyErrors: 0, mistakes: 0, servicePenalty: 0,
     dialog: null, action: null, lesson: null, lessonSeen: [], decisionSerial: 0,
     feedback: 'WASD / 方向鍵走動，靠近標記按 E。先觀察，再選擇處理。',

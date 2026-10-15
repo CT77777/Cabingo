@@ -207,7 +207,7 @@ def main():
     check('Practice recovery feedback precedes the unchanged choice area',description.getparent() is decision and list(decision).index(description)<list(decision).index(by_id('choices')))
     rules_copy=by_id('pauseCard').text_content()
     check('Rules distinguish two-second formal correction from immediate practice retry','修正回饋 2 秒' in rules_copy and '練習可直接重選' in rules_copy and '7 秒' not in rules_copy)
-    check('Fictional-game disclaimer remains in briefing and rules',all('虛構案例' in n.text_content() for n in [start_card,rules_node]))
+    check('Approved learning disclaimer remains in briefing and rules',all('簡化的學習內容，實際程序以各航空公司訓練為準' in n.text_content() for n in [start_card,rules_node]))
     check('Viewport enables safe-area-aware edge HUD',root.xpath('//meta[@name="viewport"]')[0].get('content','').find('viewport-fit=cover')>=0 and all('safe-area-inset-'+side in CSS for side in ['top','right','bottom','left']))
     check('Full-height shell declares both vh fallback and dynamic dvh height',bool(re.search(r'\.shell\s*\{[^}]*height:\s*100vh;[^}]*height:\s*100dvh;',CSS)))
     check('CSS hidden state cannot be undone by card display rules',any(selector=='[hidden]' and declarations.get('display')=='none!important' for selector,declarations,media in rules))
