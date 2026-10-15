@@ -594,7 +594,6 @@ body[data-panel=lesson] .control-dock, body[data-panel=lesson] .guidance, body[d
 .flight-card-copy h3 { font-size:21px; line-height:1.4; margin:8px 0 12px; font-weight:800; color:#183e46; }
 .flight-card-copy p { font-size:14px; line-height:1.85; margin:0 0 16px; color:#365358; }
 .flight-card-stamp { display:inline-block; padding:4px 9px; border:1px solid #3f8071; color:#286455; border-radius:4px; font-size:11px; letter-spacing:.08em; transform:rotate(-3deg); }
-.flight-card-review { display:block; color:#77664b; font-size:12px; margin-top:13px; }
 .card-reference { border-top:1px solid #d6c6a5; background:#eae1cc; }
 .card-reference>summary { padding:13px 22px; min-height:44px; cursor:pointer; font-size:12px; color:#365358; }
 .card-reference .knowledge-copy p,.card-reference .knowledge-copy small { color:#365358; }
