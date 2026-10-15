@@ -69,7 +69,7 @@ try {
   let previousBagGroup=null,oldObjectiveDisposed=0;
   for(const side of ['left','right'])for(const variant of [0,1,2])for(const z of [3,7,13]) {
     const s=makeState(variant,side,z),result=view.render(s,.016);
-    assert.equal(result.selectedId,'bag');assert(result.labels.length>=6);
+    assert.equal(result.selectedId,'bag');assert(result.labels.length>=5);
     const evidenceLabels=result.labels.filter(l=>l.kind==='detail').map(l=>l.text);
     assert.deepEqual(evidenceLabels,variant===0?['空櫃']:variant===1?['已滿','可用空櫃']:['已收妥']);
     for(const label of result.labels) {
@@ -108,6 +108,7 @@ try {
     const bag=object('task-luggage'),destinationSide=(side==='left'?-1:1)*(variant===1?-1:1);
     approx(bag.position.x,destinationSide*2.3);approx(bag.position.y,2.43);approx(bag.position.z,7);
     approx(object('available-bin').getObjectByName('bin-door').rotation.z,0,'destination door closed');
+    assert(new Box3().setFromObject(object('available-bin')).containsBox(new Box3().setFromObject(bag)),'scaled bag fits inside compact closed bin');
     s.tasks[0].done=true;s.action=null;view.render(s,.016);approx(bag.position.x,destinationSide*2.3,'completed bag retained');
   }
   assert(report.maxBagFrameTravel<.04,'no bag teleport between 60fps frames');
@@ -152,6 +153,10 @@ try {
   assert.equal(typeof view.getScreenPosition,'function');
   const pinned=view.render(makeState(),.016).labels.find(l=>l.id==='bag');
   assert.equal(pinned.anchor.x,-1.25,'task label anchored at passenger');
+  const headAnchor=object('passenger-2-1').getObjectByName('head').getWorldPosition(new Vector3());approx(pinned.anchor.y,headAnchor.y+.31,'anchor follows the animated head');
+  const hiddenReport=view.render({...makeState(),player:{x:0,z:12,angle:0,step:0}},.016).labels;assert(!hiddenReport.some(l=>l.id==='report'),'distant report marker does not cover crew');
+  view.render(closeup,.016);const fadeMaterial=object('available-bin').children.find(o=>o.material).material;assert(fadeMaterial.version>0,'fade invalidates opaque shader');const fadeVersion=fadeMaterial.version;view.render(closeup,.016);assert.equal(fadeMaterial.version,fadeVersion,'do not invalidate shader every frame');assert(object('available-bin').children.some(o=>o.material?.opacity<1),'bin fades in safety closeup');
+  view.render(makeState(),.016);assert(object('available-bin').children.filter(o=>o.material).every(o=>o.material.opacity===1),'bin opacity restores after closeup');
   const deliveryState=makeState();deliveryState.action={id:77,kind:'task',taskId:'water',time:4,duration:8,choice:{id:'serve'}};
   view.render(deliveryState,.016);const cup=object('delivery-water');assert(cup.visible);const cupAt=cup.position.clone();
   deliveryState.status='paused';view.render(deliveryState,1);assert(cup.position.equals(cupAt));

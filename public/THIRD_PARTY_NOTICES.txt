@@ -1,4 +1,4 @@
-Cabin, Please. 3D prototype
+Cabingo 3D prototype
 
 Three.js version 0.180.0, fetched from the official npm package:
 https://registry.npmjs.org/three/-/three-0.180.0.tgz
@@ -13,3 +13,5 @@ characters, or other assets were copied from that repository.
 All cabin geometry, characters, scenario logic and UI are original for this prototype.
 
 Cabingo v0.3: passenger motion, synthesized Web Audio effects and inline SVG task icons are original procedural work. No external audio files, character models or textures were added.
+
+Cabingo v0.4: the eight-bar lounge piano loop is original synthesized music, generated locally with Web Audio. No recordings or third-party music were added.

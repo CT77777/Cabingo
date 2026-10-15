@@ -7,3 +7,6 @@ for(const raw of ['bad','null','{}','{"version":2}',JSON.stringify({version:1,st
 const r=summarizeResult(base).record;assert.deepEqual(parseBest(JSON.stringify(r)),r);assert.equal(selectBest(r,{...r}),r);assert.equal(selectBest(r,{...r,elapsed:61}),r);assert.equal(selectBest(r,{...r,elapsed:59}).elapsed,59);
 assert(summarizeResult({...base,safetyErrors:1}).advice.includes('安全'));
 console.log('PASS rating boundaries, advice priority, practice isolation and best-record validation');
+
+for(const patch of [{endReason:'timeout',grade:'incomplete'},{safetyErrors:2}])assert.equal(summarizeResult({...base,...patch}).record,null);
+assert.equal(parseBest(JSON.stringify({...r,stars:0})),null,'discard legacy failed best record');

@@ -12,3 +12,5 @@ __pycache__/
 *.key
 *.tar.gz
 *.zip
+
+.superpowers/

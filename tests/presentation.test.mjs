@@ -14,3 +14,5 @@ for(const side of ['left','right'])for(const id of ['bag','belt','tray']){const 
 assert.equal(passengerPose({time:1,reducedMotion:true,reaction:{type:'complete',age:.2}}).headX,passengerPose({time:1,reducedMotion:true,reaction:{type:'complete',age:.4}}).headX,'reduced motion has no head nod');
 assert.equal(actionPose({taskId:'bag',choiceId:'stow',progress:.2,reducedMotion:true}).bodyPitch,actionPose({taskId:'bag',choiceId:'stow',progress:.4,reducedMotion:true}).bodyPitch,'reduced motion has no bag bob');
 console.log('PASS poses, reduced motion, milestone selection, label collision and camera contracts');
+
+assert.equal(decisionPose({player:{z:6},task:{id:'bag',z:7,side:'left'}}).position[0],decisionPose({player:{z:6},task:{id:'bag',z:7,side:'right'}}).position[0],'consistent closeup entry side');

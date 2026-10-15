@@ -25,7 +25,7 @@ export function decisionPose({player,task,aspect=1.6}) {
   const side=task.side==='right'?1:-1, z=task.z;
   // High shoulder angle keeps hands, floor evidence and bins in the upper scene.
   const wide=task.id==='bag', k=Math.max(1,.95/Math.max(.35,aspect));
-  return {position:[-side*(wide?4.4*k:.8),(wide?5.8:4.5)*k,z-(wide?6:4.5)*k],
+  return {position:[-(wide&&aspect>=.8?4.4*k:.8),(wide?5.8:4.5)*k,z-(wide?6:4.5)*k],
     target:[wide?0:side*.3,wide?1.45:1.55,z-(wide?1.6:1.2)],fov:wide?55:48};
 }
 function overlaps(a,b){return a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;}

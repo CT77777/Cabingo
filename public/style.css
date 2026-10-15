@@ -317,3 +317,16 @@ body[data-panel=decision][data-decision-kind=safety] .scene-badge { display:none
   body[data-panel=decision] .guidance, body[data-panel=decision] .control-dock,
   body[data-panel=decision] .scene-badge { display:none; }
 }
+
+/* Assistance is driven by the player's input; green marks the release window. */
+.interact { touch-action:none; user-select:none; }
+.hold-meter { position:relative; height:12px; margin-top:8px; border:1px solid #b4d5c6; border-radius:6px; background:linear-gradient(to right,#647b82 0%,#647b82 45.83%,#a8dfcb 45.83%,#a8dfcb 87.5%,#647b82 87.5%); overflow:hidden; }
+.hold-meter i { display:block; height:100%; border-right:3px solid #fff9df; background:#10243688; }
+.music-control { display:flex; align-items:center; gap:12px; margin:12px 0; font-size:13px; }
+#musicSlider { flex:1; min-height:44px; accent-color:var(--mint); }
+@media (max-width:700px) {
+ .idle-card { padding:4px 8px; }
+ .score-row { white-space:nowrap; }
+ .score-row b { font-size:11px; }
+ .task-details { padding:3px 8px; }
+}
