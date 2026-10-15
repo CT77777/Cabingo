@@ -53,6 +53,20 @@ function harness(logic,{seed=1701,handsOn=true,reducedMotion=false,phone=false,s
 (async()=>{
   const logic={...await import(pathToFileURL(path.join(root,'public/preflight.mjs'))),...await import(pathToFileURL(path.join(root,'public/presentation.mjs'))),...await import(pathToFileURL(path.join(root,'public/results.mjs')))};
   const test=(name,fn)=>{try{fn();results.push({name,passed:true});console.log('PASS',name);}catch(error){results.push({name,passed:false,error:error.message,stack:error.stack});console.error('FAIL',name,'\n ',error.message);}};
+  test('Aisle warning persists until every obstruction is cleared and points in screen directions',()=>{
+    const h=harness(logic);h.begin(true);const s=h.state(),task=s.tasks.find(t=>t.id==='water');
+    s.hazards=[{id:'hazard-water',taskId:task.id,x:0,z:4,row:task.row,done:false},{id:'hazard-blanket',taskId:'blanket',x:0,z:10,row:4,done:false}];s.player.x=0;s.player.z=1;h.api.refresh(true);
+    assert.equal(h.ids.aisleAlert.hidden,false);assert.equal(h.ids.aisleAlertTitle.textContent,'走道受阻 · 2 件待處理');assert(h.ids.aisleAlertDirection.textContent.includes('↑ 往畫面上方'));
+    s.player.z=5.5;h.api.refresh(true);assert(h.ids.aisleAlertDirection.textContent.includes('↓ 往畫面下方'));
+    s.player.z=4;s.player.x=2;h.api.refresh(true);assert(h.ids.aisleAlertDirection.textContent.includes('→ 往畫面右方'));
+    s.player.x=-2;h.api.refresh(true);assert(h.ids.aisleAlertDirection.textContent.includes('← 往畫面左方'));
+    s.player.x=0;s.near='hazard-water';h.api.refresh(true);assert(h.ids.aisleAlertDirection.textContent.includes('已靠近紅圈'));s.action={kind:'correction',time:0,duration:2,choice:{feedback:'修正'}};h.api.refresh(true);assert(!h.ids.aisleAlertDirection.textContent.includes('按 E'));s.action=null;
+    s.near=null;h.api.refresh(true);assert(!h.ids.aisleAlertDirection.textContent.includes('完成目前互動'));assert(h.ids.aisleAlertDirection.textContent.includes('確認互動目標'));
+    s.hazards[0].done=true;h.api.refresh(true);assert.equal(h.ids.aisleAlertTitle.textContent,'走道受阻 · 1 件待處理');assert(h.ids.aisleAlertDirection.textContent.includes('↑ 往畫面上方'));
+    h.dispatch('blur');assert.equal(h.ids.aisleAlert.hidden,true);h.ids.awayResumeButton.click({detail:1});assert.equal(h.ids.aisleAlert.hidden,false);
+    s.hazards[1].done=true;h.api.refresh(true);assert.equal(h.ids.aisleAlert.hidden,true);
+    s.hazards[1].done=false;s.status='finished';h.api.refresh(true);assert.equal(h.ids.aisleAlert.hidden,true);
+  });
   test('Hands-on keyboard and pointer complete work, idle and cancelled holds do not',()=>{
     for(const input of ['keyboard','pointer']){
       const h=harness(logic,{handsOn:true});h.open(true);h.choice(c=>c.good);h.step(120);assert(h.state().action);assert.equal(h.state().action.interaction.index,0);
