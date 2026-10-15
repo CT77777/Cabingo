@@ -28,22 +28,7 @@ function emit(s,type,taskId=null,detail={}) {
 export function readEvents(s,cursor) {
  return {events:s.events.filter(e=>cursor?.runId!==s.runId||e.seq>cursor.seq),cursor:{runId:s.runId,seq:s.eventSeq}};
 }
-function actionSteps(a) {
-  const tap=label=>({label,mode:'tap'}),hold=label=>({label,mode:'hold'});
-  if(a.kind==='clear-hazard')return [tap('招呼旅客'),hold('引導旅客返回座位')];
-  if(a.kind==='handoff')return [tap('呼叫同事'),tap('確認交接內容')];
-  if(a.kind==='wait')return [tap('向旅客說明等候安排')];
-  const id=a.choice?.id;
-  if(id==='check')return [tap('查看現場'),tap('確認狀態')];
-  if(a.taskId==='bag')return [hold('抬起行李'),tap('放入可用空櫃並關門')];
-  if(a.taskId==='belt')return [tap(id==='diagram'?'指出圖示扣法':'請旅客放下手機'),hold('協助對齊並扣好安全帶')];
-  if(a.taskId==='tray')return id==='assist'?[hold('接穩咖啡'),tap('安置桌面物品'),tap('收起餐桌')]:[tap('確認桌面清空'),hold('收起餐桌')];
-  if(a.taskId==='water')return [tap('拿起水杯'),hold('倒水至綠色區域後放開')];
-  if(a.taskId==='blanket')return [tap('取出毯子'),hold('遞給旅客')];
-  return [tap(id==='ask'?'向同事確認消息':'查看資訊板'),tap('向旅客回覆')];
-}
-function beginAction(s, action) { s.action={...action,id:++s.actionSerial};
- if(s.handsOn&&action.kind!=='correction')s.action.interaction={steps:actionSteps(action),index:0,held:false,fill:0,retry:false};emit(s,"action-start",action.taskId,{choiceId:action.choice?.id,kind:action.kind}); }
+function beginAction(s, action) { s.action={...action,id:++s.actionSerial};emit(s,"action-start",action.taskId,{choiceId:action.choice?.id,kind:action.kind}); }
 const EPSILON = 1e-9;
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 function rng(seed) {
@@ -61,7 +46,6 @@ function shuffle(list, random) {
 function feedback(s, copy, kind = 'normal') { s.feedback = copy; s.feedbackKind = kind; }
 function showLesson(s, id) {
   if (s.lesson || s.lessonSeen.includes(id)) return false;
-  actionInput(s,'cancel');
   s.lesson = { id, ...LESSONS[id] };
   if (id === 'correction' && s.action?.choice?.feedback) s.lesson.copy = `${s.action.choice.feedback} ${s.lesson.copy}`;
   s.player.walking = false;
@@ -69,7 +53,7 @@ function showLesson(s, id) {
 }
 
 export function createState(options = {}) {
-  let { seed = 1701, practice = false, handsOn = false } = options && typeof options === 'object' ? options : {};
+  let { seed = 1701, practice = false } = options && typeof options === 'object' ? options : {};
   seed = Number.isFinite(seed) ? seed >>> 0 : 1701;
   const random = rng(seed), rows = shuffle([0, 1, 2, 3, 4, 5], random);
   const tasks = DEFINITIONS.map((d, i) => {
@@ -84,7 +68,7 @@ export function createState(options = {}) {
   });
   const s = {
     runId: `run-${++runSerial}`, eventSeq:0, events:[], actionSerial:0,
-    chapter: 1, seed, handsOn: !!handsOn, practice: !!practice, status: 'briefing', elapsed: 0, duration: 100,
+    chapter: 1, seed, practice: !!practice, status: 'briefing', elapsed: 0, duration: 100,
     cameraMode: 'follow', reducedMotion: false,
     player: { x: 0, z: 1.5, angle: 0, walking: false, step: 0 },
     tasks, hazards: [], hazardsCleared: 0, handoffTokens: 1, handoffJob: null,
@@ -230,10 +214,6 @@ function choicesFor(s, t) {
     const funny=choices.find(c=>c.id===(t.id==='question'?'ask':'wait'));
     funny.label=t.id==='water'?'我去請水杯出場，請稍等':t.id==='blanket'?'我去叫毯子起床，請稍等':'我去問問消息有沒有睡醒';funny.humorous=true;
   }
-  if(s.handsOn)for(const c of choices){
-    const steps=actionSteps({kind:c.handoff?'handoff':c.ack?'wait':'task',taskId:t.id,choice:c});
-    c.tags=[`${steps.length} 步操作`,...c.tags.filter(tag=>!/^\d+秒$/.test(tag))];
-  }
   t.quote = quote; t.description = description;
   return { handoffHint: choices.some(c=>c.handoff) ? '每輪限 1 次。確認交接後，同事再過 12 秒送達；期間可繼續巡艙，服務回饋較少。' : null, id: t.id, title: t.title, quote, description, choices: shuffle(choices, rng(s.seed + s.decisionSerial++ * 97)) };
 }
@@ -294,29 +274,6 @@ export function choose(s, index) {
   }
   return true;
 }
-// Press/release controls complete work; elapsed time alone never advances a step.
-function updateActionProgress(a){const i=a.interaction;a.time=a.duration*(i.index+Math.min(.45,i.fill/.65*.45))/i.steps.length;}
-function nextActionStep(s){const a=s.action,i=a.interaction;i.index++;i.fill=0;i.held=false;i.retry=false;
- if(i.index>=i.steps.length){finishAction(s);return;}updateActionProgress(a);}
-export function actionInput(s,input){
- const a=s.action,i=a?.interaction;
- if(!i)return false;
- if(input==='cancel'){i.held=false;i.fill=0;updateActionProgress(a);return true;}
- if(s.status!=='playing'||s.dialog||s.lesson)return false;
- const step=i.steps[i.index];
- if(input==='press'){
-   if(i.held)return false;
-   if(step.mode==='tap')nextActionStep(s);else{i.held=true;i.fill=0;i.retry=false;}
-   return true;
- }
- if(input==='release'&&i.held){
-   i.held=false;
-   if(i.fill>=.55&&i.fill<=1.05)nextActionStep(s);
-   else{i.fill=0;i.retry=true;updateActionProgress(a);feedback(s,'再試一次：按住，進入綠色區域就放開。不扣判斷分。');}
-   return true;
- }
- return false;
-}
 export function dismissLesson(s) {
   if (!s.lesson || s.status !== 'playing') return false;
   if (!s.lessonSeen.includes(s.lesson.id)) s.lessonSeen.push(s.lesson.id);
@@ -324,7 +281,7 @@ export function dismissLesson(s) {
 }
 export function pause(s) {
   if (s.status !== 'playing') return false;
-  actionInput(s,'cancel'); s.status = 'paused'; s.player.walking = false; return true;
+  s.status = 'paused'; s.player.walking = false; return true;
 }
 export function resume(s) {
   if (s.status !== 'paused') return false;
@@ -402,9 +359,8 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
   }
   if (s.action) {
     s.player.walking = false;
-    if(s.action.interaction){const i=s.action.interaction;if(i.held){i.fill=Math.min(1.2,i.fill+dt);updateActionProgress(s.action);}}
-    else {s.action.time = Math.min(s.action.duration, s.action.time + dt);
-    if (s.action.duration - s.action.time <= EPSILON) { s.action.time = s.action.duration; finishAction(s); }}
+    s.action.time = Math.min(s.action.duration, s.action.time + dt);
+    if (s.action.duration - s.action.time <= EPSILON) { s.action.time = s.action.duration; finishAction(s); }
   } else move(s, input?.x, input?.z, dt);
   for (const h of s.hazards) {
     if (h.collisionPending && !rectBlocked(s.player.x, s.player.z, -.38, .38, h.z - .34, h.z + .34)) h.collisionPending = false;
