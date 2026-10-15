@@ -7,11 +7,11 @@ const first=game.readEvents(a,null);
 assert(first.events.some(e=>e.type==='demand'&&e.taskId==='water'));
 assert.deepEqual(game.readEvents(a,first.cursor).events,[]);
 assert.equal(game.readEvents(b,first.cursor).cursor.runId,b.runId);
-// Isolated rule fixture: entering a service dialog must explain handoff before choosing.
+// Legacy rule fixture: clean dialogue retains handoff timing without repeated tutorial copy.
 const s=game.createState({seed:7,practice:true});game.start(s);
 const water=s.tasks.find(t=>t.id==='water');s.player.z=water.z;s.near='water';
 game.interact(s);
-assert(s.dialog.handoffHint.includes('12 秒'));
+assert.equal(s.dialog.handoffHint,null);assert(s.dialog.choices.some(c=>c.handoff));
 assert.equal(s.handoffTokens,1);
 let cursor=game.readEvents(s,null).cursor;
 for(let i=0;i<40;i++)game.choose(s,s.dialog.choices.findIndex(c=>!c.good));
