@@ -226,8 +226,7 @@ function selectChapter(id){
 function renderChapterMenu(){
  const signature=JSON.stringify([ready,campaign,campaignStorageAvailable]);if(signature===chapterMenuSignature)return;chapterMenuSignature=signature;
  const current=getChapter(campaign.currentChapterId);text('chapterPickerSelection',`：${formatChapterLabel(current)}`);
- text('campaignStatus',`航班進度 · 完成 ${Object.keys(campaign.bestStars).length} / ${CHAPTERS.length} 段`);
- text('chapterMenuHint',campaignStorageAvailable?`目前開放${CHAPTERS.filter(c=>c.available).map(formatChapterLabel).join('、')}；其餘章節製作中。`:'此瀏覽器無法儲存進度；本次仍可遊玩。');
+ hide('chapterMenuHint',campaignStorageAvailable);
  $('chapterList').replaceChildren(...CHAPTERS.map(chapter=>{
   const unlocked=campaign.unlockedChapterIds.includes(chapter.id),available=chapter.available&&unlocked,b=document.createElement('button');
   b.className='chapter-option';b.dataset.chapter=chapter.id;b.disabled=!ready||!available;b.setAttribute('aria-pressed',String(chapter.id===current.id));

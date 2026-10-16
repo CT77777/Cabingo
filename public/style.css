@@ -71,7 +71,6 @@ small { display: block; font-size: 11px; color: #abc1bd; line-height: 1.7; }
 .secondary { background: #eff8e70c; border: 1px solid #afcebd55; color: #d2e7da; }
 .start-card>button { width: 100%; margin-bottom: 8px; }
 .start-card small { margin-top: 5px; }
-.start-card .disclaimer { margin-top: 12px; padding-top: 10px; border-top: 1px solid #b8d7bf33; font-size: 10px; color: #b6cac1; }
 .webgl-error { background: #143045; }
 .webgl-error strong { font-size: 21px; }
 .webgl-error p { font-size: 13px; line-height: 1.8; }
@@ -256,7 +255,6 @@ body[data-panel=error] aside, body[data-panel=error] .control-dock, body[data-pa
   .start-card h1 { margin: 7px 0; font-size: 21px; }
   .start-card p { margin: 6px 0 8px; font-size: 12px; }
   .start-card small { font-size: 10px; line-height: 1.45; }
-  .start-card .disclaimer { margin-top: 8px; padding-top: 6px; }
   .start-card>button { min-height: 38px; padding: 8px; margin-bottom: 6px; }
   .scene-overlay { padding-top: calc(var(--safe-top) + 46px); padding-bottom: var(--safe-bottom); }
   .guidance { padding: 7px 10px; }
@@ -431,7 +429,7 @@ body[data-panel=decision][data-decision-kind=safety] .scene-badge { display:none
 .chapter-option img { grid-column:1; width:16px; height:16px; }
 .chapter-option>span { grid-column:2; font-size:12px; }
 .chapter-option>small { grid-column:2; font-size:10px; margin:0; }
-#campaignStatus, #chapterMenuHint { font-size:10px; margin-top:5px; }
+#chapterMenuHint { font-size:10px; margin-top:5px; }
 #briefDescription, #briefTiming { white-space:pre-line; }
 /* Space, conversational replies and an analog thumbstick share the cabin palette. */
 .sr-only { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; overflow:hidden!important; clip-path:inset(50%)!important; }
