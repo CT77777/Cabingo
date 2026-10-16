@@ -105,7 +105,7 @@ npm run build
 5. 若倉庫已經有內容，先拉取／下載最新版本，確認沒有同名檔案會覆寫現有工作；使用新分支並開 Pull Request 檢查差異。保留原有授權與檔案，遇到衝突先處理，不要 force push。
 6. 填入提交訊息（例如 `Import standalone Cabingo 3D source`）並提交；完成後檢查 `public/index.html` 與 `public/vendor/THREE-LICENSE.txt` 都存在。
 
-不需要把 `dist/`、`artifacts/`、`.venv/` 或 `node_modules/` 上傳到 GitHub。此倉庫已由 Cloudflare Git 整合監聽 main；推送前須先完成 Claude Code review。部署狀態可查看該 commit 的 Workers Builds 檢查。
+不需要把 `dist/`、`artifacts/`、`.venv/` 或 `node_modules/` 上傳到 GitHub。此倉庫已由 Cloudflare Git 整合監聽 main。部署狀態可查看該 commit 的 Workers Builds 檢查。
 
 ## 素材與授權
 
