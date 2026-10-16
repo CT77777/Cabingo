@@ -765,6 +765,29 @@ body[data-panel=result] aside, body[data-panel=result] .control-dock, body[data-
 .result-card .training-feedback-item .training-feedback-evidence { color:#f8f5e9; }
 .training-feedback-item p strong { color:#eaf1e9; font-weight:600; }
 .result-card>#resultCodexButton { width:100%; justify-content:center; margin-top:4px; min-height:40px; }
+.retry-practice { text-align:left; margin:20px 0; border-top:1px solid #b4d8cb33; padding-top:16px; }
+.retry-practice h3 { font-size:16px; margin:0 0 8px; }
+.retry-task-list { display:grid; gap:8px; }
+.retry-task { display:grid; gap:5px; width:100%; min-height:56px; text-align:left; white-space:normal; overflow-wrap:anywhere; padding:12px 14px; border-color:#a8dfcb66; }
+.retry-task strong { font-size:14px; color:var(--mint); }
+.retry-task small { font-size:12px; font-weight:400; color:#bbd4cb; }
+.retry-overlay { position:fixed; inset:0; z-index:90; display:grid; place-items:center; padding:var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); background:#091e2de8; backdrop-filter:blur(8px); }
+.retry-card { width:min(100%,600px); max-height:100%; overflow:auto; overscroll-behavior:contain; border:1px solid #a8dfcb77; border-radius:18px; padding:24px; background:#173541; overflow-wrap:anywhere; }
+.retry-heading { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:8px; }
+.retry-heading button { min-height:44px; }
+.retry-card h2 { font-size:24px; line-height:1.4; margin:14px 0 10px; }
+.retry-card p { font-size:14px; line-height:1.7; }
+.retry-card .training-scope { font-size:12px; color:#bbd4cb; }
+.retry-card .choices { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; margin:16px 0; }
+.retry-card .choice { min-height:52px; }
+.retry-card .evidence-cards { max-width:100%; }
+.retry-card .retry-feedback { border-left:3px solid #ffbd8d; background:#102b36; padding:10px 12px; color:#ffe2c9; }
+.retry-card .retry-feedback[data-correct=true] { border-color:var(--mint); color:var(--mint); }
+.retry-progress { display:grid; gap:8px; margin:14px 0; }
+.retry-progress p { border:1px solid #b4d8cb55; padding:12px; margin:0; border-radius:8px; }
+#retryAfter { color:var(--mint); font-weight:700; }
+#retryComparisonNote { color:#bbd4cb; font-size:12px; }
+#retryReturn { width:100%; min-height:48px; margin-top:16px; }
 .result-celebration { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
 .result-celebration i { position:absolute; top:-20px; left:calc(5% + var(--i)*5%); width:8px; height:15px; background:var(--gold); opacity:0; }
 .result-celebration i:nth-child(3n) { background:var(--mint); width:10px; height:10px; }

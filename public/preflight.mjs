@@ -273,6 +273,13 @@ export function choose(s, index) {
   if(!judgment.attempts)judgment.firstChoice={label:choice.label,good:choice.good,mode:judgment.mode};
   if(!choice.good&&(t.kind==='safety'||choice.safetyError))judgment.safetyIncorrect=(judgment.safetyIncorrect||0)+1;
   judgment.attempts++;if(!choice.good)judgment.incorrect++;judgment.choiceId=choice.id;judgment.choiceLabel=choice.label;judgment.good=choice.good;judgment.feedback=choice.feedback;
+  // Preserve the actual missed decision: later service choices can have a
+  // different aisle, wait or handoff context. Practice never replays the run.
+  if(!choice.good)judgment.retryDecision={
+    title:s.dialog.title,quote:s.dialog.quote,description:s.dialog.description,
+    task:{id:t.id,variant:t.variant,side:t.side},
+    choices:s.dialog.choices.map(c=>({label:c.label,good:c.good,feedback:c.feedback,tags:[...c.tags]}))
+  };
   emit(s,'choice',t.id,{choiceId:choice.id});
   if(!choice.good)emit(s,'mistake',t.id,{choiceId:choice.id});
   const decision = s.dialog;
