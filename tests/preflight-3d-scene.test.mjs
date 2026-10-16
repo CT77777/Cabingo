@@ -183,6 +183,18 @@ try {
   colleagueState.handoffJob=null;const delegatedWater=colleagueState.tasks.find(t=>t.id==='water');delegatedWater.done=true;delegatedWater.handoff=true;delegatedWater.completedAt=12;colleagueState.elapsed=12;const completedLabels=view.render(colleagueState,.016).labels;assert(completedLabels.some(l=>l.id==='coworker'&&l.text.includes('已送達')));
   colleagueState.elapsed=22;assert(!view.render(colleagueState,.016).labels.some(l=>l.id==='coworker'),'settled colleague does not block report labels');
   const engine=await import(pathToFileURL(path.join(root,'public/preflight.mjs')));
+  for(const id of ['water','blanket']){
+    const exam=engine.createState({chapterId:'preflight',assessment:true,contextual:true,seed:7});engine.start(exam);
+    const task=exam.tasks.find(t=>t.id===id);task.active=true;task.assigned=true;task.assessmentAnswered=true;exam.handoffJob={taskId:id,remaining:12};
+    for(const remaining of [12,7,.5]){
+      exam.handoffJob.remaining=remaining;view.render(exam,.016);
+      assert(object('galley-supply').visible,'assessment colleague has a visible pickup source');
+      assert(object(`delivery-${id}`).visible,'assessment cup/blanket stays visible through preparation and delivery');
+      assert(!object('service-tray').visible,'delegation does not put a tray in player hands');
+    }
+    exam.handoffJob=null;task.done=true;task.handoff=true;task.completedAt=exam.elapsed;view.render(exam,.016);assert(object(`delivery-${id}`).visible);
+    task.deferred=true;view.render(exam,.016);assert(!object(`delivery-${id}`).visible,'a recorded request has no delivered prop');
+  }
   const boarding=engine.createState({chapterId:'boarding',seed:7,contextual:true});engine.start(boarding);boarding.renderTargets=engine.targets(boarding);view.render(boarding,.016);
   for(const status of ['briefing','playing','paused','finished']){view.render({...boarding,status},.016);assert.equal(object('service-tray').visible,false,`boarding ${status} has no service tray`);assert.equal(object('galley-supply').visible,false,`boarding ${status} has no loose service cart`);}view.render(boarding,.016);
   const walker=object('boarding-walking-elder');assert(walker.visible);approx(walker.position.z,3);assert(!object('returning-elder').visible);

@@ -58,10 +58,11 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
   const logic={...await import(pathToFileURL(path.join(root,'public/preflight.mjs'))),...await import(pathToFileURL(path.join(root,'public/presentation.mjs'))),...await import(pathToFileURL(path.join(root,'public/results.mjs'))),...await import(pathToFileURL(path.join(root,'public/assessment.mjs'))),...await import(pathToFileURL(path.join(root,'public/assessment-records.mjs'))),...await import(pathToFileURL(path.join(root,'public/chapters/index.mjs'))),...await import(pathToFileURL(path.join(root,'public/campaign.mjs'))),...await import(pathToFileURL(path.join(root,'public/interaction.mjs'))),...await import(pathToFileURL(path.join(root,'public/boarding.mjs'))),...await import(pathToFileURL(path.join(root,'public/boarding-ui.mjs'))),...await import(pathToFileURL(path.join(root,'public/learning.mjs'))),...await import(pathToFileURL(path.join(root,'public/knowledge/index.mjs')))};
 
   const test=(name,fn)=>{try{fn();results.push({name,passed:true});console.log('PASS',name);}catch(error){results.push({name,passed:false,error:error.message,stack:error.stack});console.error('FAIL',name,'\n ',error.message);}};
-  function finishAssessment(h,{wrong={},elapsed=35}={}){
+  function finishAssessment(h,{wrong={},elapsed=35,lateIds=[]}={}){
     h.ids.assessmentButton.click({detail:1});const s=h.state();
     assert(s.assessment&&!s.practice);assert(!s.lesson);assert(!s.boarding?.coach);
     for(const t of s.tasks){
+      if(lateIds.includes(t.id))t.deadlineAt=0;
       while(!t.active)h.step();s.player.x=0;s.player.z=t.z-.8;assert(logic.interact(s));h.api.refresh(true);
       if(s.chapterId==='preflight'&&t.kind==='service'){assert(h.ids.decisionDescription.hidden);assert.equal(h.ids.decisionDescription.textContent,'');}else{assert.equal(h.ids.decisionDescription.textContent,s.dialog.description);assert(!h.ids.decisionDescription.hidden);}
       const match=wrong[t.id],index=match?s.dialog.choices.findIndex(c=>c.id===match):s.dialog.choices.findIndex(c=>c.good);
@@ -71,7 +72,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
         if(good){assert(s.correctFeedback);assert(!s.dialog&&!s.answerFeedback);assert(!h.ids.correctFeedback.hidden);assert(h.ids.decisionCard.hidden);assert.equal(!!s.action,t.id!=='priority');}
         else {assert(!h.ids.answerFeedback.hidden);assert.equal(h.ids.answerMark.textContent,'✕');assert(!h.ids.answerCopy.textContent.includes('正確選擇'));assert(h.ids.choices.hidden);}
         const first=copy(s.judgments);h.tap(`Digit${index+1}`);assert.deepEqual(copy(s.judgments),first);
-        if(!good)h.ids.answerContinue.click({detail:1});let frames=0;while(s.action&&frames++<1000){if(s.action.interaction){const i=s.action.interaction,step=i.steps[i.index];logic.actionInput(s,'press');if(step.mode==='hold'){h.step(42);logic.actionInput(s,'release');}}else h.step();}assert(!s.action);
+        if(!good)h.ids.answerContinue.click({detail:1});let frames=0;while((s.action||s.handoffJob)&&frames++<2000){if(s.action?.interaction){const i=s.action.interaction,step=i.steps[i.index];logic.actionInput(s,'press');if(step.mode==='hold'){h.step(42);logic.actionInput(s,'release');}}else h.step();}assert(!s.action);
       }else assert.equal(h.ids.feedback.textContent,'已記錄作答，結束後統一講評。');
       assert(!s.dialog&&!s.action&&!s.recovery);
     }
@@ -81,16 +82,16 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     const h=harness(logic,{chapterId:'boarding'});assert(!h.ids.practiceButton);assert.equal(h.ids.startButton.textContent,'開始情境演練');
     assert(h.ids.assessmentIntro.textContent.includes('登機 · 90 秒 · 5 題'));
     h.ids.chapterList.children.find(b=>b.dataset.chapter==='preflight').click({detail:1});
-    assert(h.ids.assessmentIntro.textContent.includes('起飛前巡艙 · 100 秒 · 6 題'));
+    assert(h.ids.assessmentIntro.textContent.includes('起飛前巡艙 · 100 秒 · 5 題'));
     assert(h.ids.chapterList.children.filter(b=>!b.disabled).length===2);h.begin();assert(h.state().practice);assert.equal(h.ids.clock.textContent,'演練');
   });
   test('Both chapter assessments retain their feedback rules, save stars once and replay the same chapter',()=>{
     for(const chapterId of ['boarding','preflight']){
       const h=harness(logic,{chapterId,contextual:true}),s=finishAssessment(h);
       const raw=h.storage[logic.ASSESSMENT_STORAGE_KEY],saved=JSON.parse(raw).records[`${chapterId}:${logic.assessmentVersion(chapterId)}`];
-      assert.equal(saved.stars,3);assert.equal(saved.elapsed,35);assert.equal(saved.total,chapterId==='boarding'?5:6);
+      assert.equal(saved.stars,3);assert.equal(saved.elapsed,35);assert.equal(saved.total,5);
       assert(h.ids.resultStars.textContent.includes('3 / 3'));assert(h.ids.bestRecord.textContent.includes('已更新'));
-      assert.equal(h.ids.trainingFeedbackList.children.length,s.tasks.length);assert.equal(h.ids.priorityCount.textContent,'1 / 1');
+      assert.equal(h.ids.trainingFeedbackList.children.length,s.tasks.length);assert.equal(h.ids.priorityCountGroup.hidden,chapterId==='preflight');if(chapterId==='boarding')assert.equal(h.ids.priorityCount.textContent,'1 / 1');
       for(const card of h.ids.trainingFeedbackList.children){assert.equal(card.children[0].children.length,1,'assessment retains the status badge');assert.equal(card.children.length,3);assert.deepEqual(card.children.slice(1).map(line=>line.children[0].textContent),['情境：','選擇做法：']);assert(card.children.slice(1).every(line=>line.children[1].textContent));}
       assert(h.ids.scoreRow.hidden);assert.equal(h.ids.handoffCount.hidden,chapterId==='boarding');assert.equal(h.storage['cabin3d-best-final-check-v1'],undefined);
       h.api.refresh(true);assert.equal(h.storage[logic.ASSESSMENT_STORAGE_KEY],raw);
@@ -204,6 +205,22 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     assert(s.action&&!s.dialog&&!s.answerFeedback);assert(!h.ids.correctFeedback.hidden);assert(h.ids.decisionCard.hidden);const action=s.action.id;
     h.tap('Escape');const progress=s.action.time;h.step(90);assert.equal(s.action.time,progress);assert(h.ids.correctFeedback.hidden);h.ids.resumeButton.click({detail:1});assert(!h.ids.correctFeedback.hidden);
     h.step(80);assert(h.ids.correctFeedback.hidden);assert.equal(s.action.id,action);h.step(120);assert(t.done);assert.equal(s.completed,1);assert.equal(s.judgments[0].attempts,1);
+  });
+
+  test('Chapter 2 displays live deadline and five-second penalties while hiding priority',()=>{
+    const h=harness(logic,{contextual:true});h.ids.assessmentButton.click({detail:1});const s=h.state(),t=s.tasks[0];
+    assert(h.ids.priorityCountGroup.hidden);assert(h.ids.taskList.children.every(row=>row.children[2].textContent.includes('好感')));
+    s.player.z=t.z-.8;logic.interact(s);h.api.refresh(true);assert(!h.ids.assessmentDeadline.hidden);
+    const before=h.ids.assessmentDeadline.textContent;h.step(70);assert.notEqual(h.ids.assessmentDeadline.textContent,before);
+    const remaining=s.duration-s.elapsed;h.choice(c=>!c.good);assert.equal(s.penaltySeconds,5);
+    assert(h.ids.answerCopy.textContent.includes('5 秒'));assert.equal(h.ids.clock.textContent,`${String(Math.floor(Math.ceil(remaining-5)/60)).padStart(2,'0')}:${String(Math.ceil(remaining-5)%60).padStart(2,'0')}`);
+  });
+  test('An overdue task appears in chapter 2 score breakdown and persisted best record',()=>{
+    const h=harness(logic,{contextual:true});finishAssessment(h,{lateIds:['water']});
+    assert(h.ids.resultDetails.textContent.includes('100 分 − 逾時 10 分 ＝ 90 / 100 分'));
+    assert(h.ids.resultDetails.textContent.includes('想要一杯水（−10 分）'));assert(!h.ids.resultDetails.textContent.includes('優先序'));
+    assert(h.ids.resultStars.textContent.includes('2 / 3'));assert(h.ids.bestRecord.textContent.includes('90 分'));
+    const saved=JSON.parse(h.storage[logic.ASSESSMENT_STORAGE_KEY]).records['preflight:4'];assert.equal(saved.score,90);assert.equal(saved.late,1);
   });
 
   test('Guided boarding requires deliberate observation and keeps a single live objective',()=>{

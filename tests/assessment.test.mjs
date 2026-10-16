@@ -4,7 +4,7 @@ import {assessmentDecision,assessmentSummary,assessmentFeedback} from '../public
 import {summarizeResult} from '../public/results.mjs';
 import {awardChapterCards,parseCodex} from '../public/learning.mjs';
 
-function settle(s){if(s.answerFeedback)assert(game.dismissAnswerFeedback(s));let frames=0;while(s.action&&frames++<1000){if(s.action.interaction){const i=s.action.interaction,step=i.steps[i.index];game.actionInput(s,'press');if(step.mode==='hold'){for(let k=0;k<7;k++)game.tick(s,.1);game.actionInput(s,'release');}}else game.tick(s,.1);}assert(!s.action);}
+function settle(s){if(s.answerFeedback)assert(game.dismissAnswerFeedback(s));let frames=0;while((s.action||s.handoffJob)&&frames++<1000){if(s.action?.interaction){const i=s.action.interaction,step=i.steps[i.index];game.actionInput(s,'press');if(step.mode==='hold'){for(let k=0;k<7;k++)game.tick(s,.1);game.actionInput(s,'release');}}else game.tick(s,.1);}assert(!s.action);}
 const fresh=(seed,chapterId='preflight')=>{const s=game.createState({chapterId,assessment:true,contextual:true,handsOn:true,seed});game.start(s);return s;};
 function open(s,t){while(!t.active)game.tick(s,.1);s.player.x=0;s.player.z=t.z-.8;assert(game.interact(s));assert.equal(s.dialog.id,t.id);}
 assert.throws(()=>game.createState({assessment:true,practice:true}),RangeError);
@@ -41,7 +41,7 @@ for(const chapterId of ['boarding','preflight'])for(let seed=1;seed<=12;seed++)f
   const summary=assessmentSummary(s);assert(summary.submitted);assert.equal(summary.safety.incorrect,wrong?(chapterId==='boarding'?2:3):0);
   assert.equal(summarizeResult(s).record,null);assert.equal(summarizeResult(s).stars,summary.stars);
   const codex=parseCodex(null);assert.deepEqual(awardChapterCards(codex,s),codex);
-  assert.equal(assessmentFeedback(s).length,chapterId==='boarding'?5:6);assert.equal(summary.stars,wrong?0:3);assert.equal(!!summary.record,!wrong);
+  assert.equal(assessmentFeedback(s).length,5);assert.equal(summary.stars,wrong?0:3);assert.equal(!!summary.record,!wrong);
   if(wrong){
     assert(summary.title.includes('安全判斷需要再練習'));
     const before=JSON.stringify(s);assessmentFeedback(s);
@@ -60,7 +60,7 @@ assert.equal(correctPositions.size,3,'answer position varies');
   const s=fresh(1);open(s,s.tasks[0]);const position={...s.player};
   for(let i=0;i<400;i++)game.tick(s,.1,{x:1,z:1});
   assert(Math.abs(s.elapsed-40)<1e-8);assert.deepEqual(s.player,position);
-  assert.equal(s.hazards.length,0);assert(s.tasks.every(t=>!t.late&&!t.warned));
+  assert.equal(s.hazards.length,0);assert(s.tasks.every(t=>t.late===(s.elapsed+1e-9>=t.deadlineAt)));
   game.pause(s);const paused=JSON.stringify(s);game.tick(s,.1);assert.equal(JSON.stringify(s),paused);
   game.resume(s);s.elapsed=99.99;game.tick(s,.1);
   assert.equal(s.endReason,'timeout');assert.equal(s.dialog,null);assert(!game.choose(s,0));
@@ -73,8 +73,8 @@ for(const chapterId of ['boarding','preflight'])for(const wrongIds of [[],['prio
  const s=fresh(2,chapterId);
  for(const t of s.tasks){open(s,t);let index=s.dialog.choices.findIndex(c=>c.good);if(wrongIds.includes(t.id)){const ordinary=s.dialog.choices.findIndex(c=>!c.good&&!c.safetyError);index=ordinary>=0?ordinary:s.dialog.choices.findIndex(c=>!c.good);}game.choose(s,index);settle(s);}
  s.player.z=1.5;game.interact(s);const result=assessmentSummary(s);
- const unsafe=wrongIds.includes('bag')||wrongIds.includes('priority')||chapterId==='preflight'&&wrongIds.length>0;
- assert.equal(result.stars,unsafe?0:wrongIds.length===0?3:wrongIds.length===1?2:1);
+ const unsafe=wrongIds.includes('bag')||chapterId==='boarding'&&wrongIds.includes('priority')||chapterId==='preflight'&&result.incorrect>0;
+ assert.equal(result.stars,unsafe?0:result.incorrect===0?3:result.incorrect===1?2:1);
 }
 // The static assessment layout retains collisions and must be traversable without completing actions.
 for(const chapterId of ['boarding','preflight'])for(let seed=1;seed<=12;seed++){

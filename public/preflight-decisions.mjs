@@ -30,6 +30,11 @@ export function preflightDecision(t,s={}) {
     const available=s.handoffTokens>0&&!s.handoffJob;
     quote=t.id==='water'?'可以給我一杯水嗎？':'可以給我一條毯子嗎？';
     description=`旅客提出${t.id==='water'?'飲水':'保暖'}需求。`;
+    if(s.assessment&&s.chapterId==='preflight')return {id:t.id,title:t.title,quote,description,choices:[
+      mk('wait','自行記錄需求，起飛後再協助',true,3,{ack:true,defer:true,feedback:'需求已記錄，起飛後再協助；這項需求已安排完成。'}),
+      mk('serve',t.id==='water'?'自行取水，暫停安全檢查':'自行取毯，暫停安全檢查',false,3,{safetyError:true,feedback:'本情境應繼續安全檢查，自行記錄或安排同事送物。'}),
+      ...(available?[mk('handoff',t.id==='water'?'請同事送水':'請同事送毯',true,1,{handoff:true,feedback:'同事已接下送物工作；你可以繼續巡艙，實際送達才算完成。'})]:[])
+    ]};
     const feedback='需求已記錄，起飛後再協助；旅客留在座位，不再計算等候耐心。記錄需求不等於物品已送達。';
     choices=[
       mk('wait','記錄需求，起飛後再協助',true,3,{ack:true,defer:true,feedback}),

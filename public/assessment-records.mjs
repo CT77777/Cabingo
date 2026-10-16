@@ -7,9 +7,13 @@ function valid(r){
  if(!Number.isInteger(r.total)||r.total<1||r.total>64||!Number.isInteger(r.incorrect)||r.incorrect<0||r.incorrect>=r.total||r.safetyErrors!==0)return false;
  if(!Number.isFinite(r.elapsed)||r.elapsed<0||r.elapsed>(r.chapterId==='boarding'?90:100))return false;
  if((r.questionVersion===2||r.chapterId==='preflight'&&r.questionVersion===3)&&r.total!==(r.chapterId==='boarding'?5:6))return false;
+ if(r.chapterId==='preflight'&&r.questionVersion===4){
+  if(r.total!==5||!Number.isInteger(r.late)||r.late<0||r.late>5||!Number.isInteger(r.score)||r.score!==Math.max(0,(5-r.incorrect)*20-r.late*10))return false;
+  return r.score>0&&r.stars===(r.score===100?3:r.score>=80?2:1);
+ }
  return r.stars===(r.incorrect===0?3:r.incorrect===1?2:1);
 }
-function clean(r){return {chapterId:r.chapterId,questionVersion:r.questionVersion,total:r.total,stars:r.stars,incorrect:r.incorrect,safetyErrors:0,elapsed:r.elapsed};}
+function clean(r){return {chapterId:r.chapterId,questionVersion:r.questionVersion,total:r.total,stars:r.stars,incorrect:r.incorrect,safetyErrors:0,elapsed:r.elapsed,...(r.chapterId==='preflight'&&r.questionVersion===4?{score:r.score,late:r.late}:{})};}
 export function parseAssessmentBest(raw){
  const next={version:1,records:{}};let value;try{value=JSON.parse(raw);}catch{return next;}
  if(!object(value)||value.version!==1||!object(value.records))return next;
@@ -20,7 +24,7 @@ export function selectAssessmentBest(previous,candidate){
  if(!valid(candidate))return previous;
  if(!previous)return clean(candidate);
  if(key(previous)!==key(candidate)||previous.total!==candidate.total)return previous;
- const a=[candidate.stars,-candidate.incorrect,-candidate.elapsed],b=[previous.stars,-previous.incorrect,-previous.elapsed];
+ const a=[candidate.stars,candidate.score??0,-candidate.incorrect,-candidate.elapsed],b=[previous.stars,previous.score??0,-previous.incorrect,-previous.elapsed];
  for(let i=0;i<a.length;i++){if(a[i]>b[i])return clean(candidate);if(a[i]<b[i])return previous;}
  return previous;
 }

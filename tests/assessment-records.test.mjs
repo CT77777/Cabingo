@@ -23,3 +23,11 @@ assert.deepEqual(Object.keys(parseAssessmentBest(malformed).records),['preflight
 // Always compare with the latest raw save rather than overwriting another tab's stronger record.
 const latest=prepareAssessmentSave(first.raw,record({elapsed:30}));const stale=prepareAssessmentSave(latest.raw,record({elapsed:45}));assert(!stale.updated);assert.equal(stale.data.records['boarding:2'].elapsed,30);
 console.log('PASS assessment records: validation, scoring invariants, better-only replacement, ties, chapter/version separation, future-schema protection and latest-save merge');
+// Chapter 2 v4 stores points and overdue counts without replacing older rules.
+const v4=(patch={})=>record({chapterId:'preflight',questionVersion:4,total:5,score:100,late:0,...patch});
+const initialV4=prepareAssessmentSave(raw,v4());assert(initialV4.updated);assert.equal(initialV4.data.records['preflight:4'].score,100);assert(initialV4.data.records['preflight:2']);
+const delayed=v4({score:90,late:1,stars:2,elapsed:10});assert.equal(selectAssessmentBest(delayed,v4({score:80,late:2,stars:2,elapsed:1})).score,90,'points precede speed');
+assert.equal(selectAssessmentBest(v4({score:80,late:2,stars:2}),delayed).score,90);
+for(const candidate of [v4({score:99}),v4({late:6}),v4({late:-1}),v4({score:90,late:1}),v4({score:100,late:1}),v4({total:6}),v4({score:0,late:5,incorrect:3,stars:1})])assert(!prepareAssessmentSave(initialV4.raw,candidate).updated);
+const restored=prepareAssessmentSave(initialV4.raw,v4({elapsed:49}));assert(restored.updated);assert.equal(restored.data.records['preflight:4'].late,0);
+console.log('PASS chapter 2 v4 record invariants, score ordering and legacy preservation');

@@ -836,3 +836,7 @@ body[data-panel=brief] .mission-hud, body[data-panel=error] .mission-hud, body[d
  .correct-feedback strong { font-size:17px; }
  .correct-feedback small { display:none; }
 }
+
+.task-row.warned span { color: #f0cf8b; }
+.task-row.late span { color: #ffad9d; }
+.result-stats { white-space: pre-line; }

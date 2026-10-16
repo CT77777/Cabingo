@@ -1,7 +1,7 @@
 import {initBoarding,tickBoarding,boardingChoices,boardingPassable,boardingTaskComplete,boardingReady,boardingTaskActor} from './boarding.mjs?v=training-modes-2';
 import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=recording-time-1';
-import {preflightDecision} from './preflight-decisions.mjs?v=ch2-actions-2';
-import {assessmentDecision} from './assessment.mjs?v=ch2-actions-2';
+import {preflightDecision} from './preflight-decisions.mjs?v=ch2-deadlines-2';
+import {assessmentDecision} from './assessment.mjs?v=ch2-deadlines-2';
 
 // Pure, deterministic preflight game state. This is a fictional game,
 // not aviation training or a representation of real operating procedures.
@@ -37,7 +37,7 @@ function actionSteps(a) {
 function beginAction(s, action) { s.action={...action,id:++s.actionSerial};
  // Deferred recording uses the choice duration so delegation saves player time.
  if(s.contextual&&action.kind!=='correction'&&!action.choice?.defer)s.action.duration=action.kind==='clear-hazard'||action.taskId==='bag'&&action.choice?.id!=='check'?2:action.choice?.id==='check'||action.kind==='wait'?.8:action.kind==='handoff'?1:action.choice?.id==='serve'?3:1.5;
- if(s.handsOn&&!s.contextual&&!['correction','clear-hazard'].includes(action.kind))s.action.interaction={steps:actionSteps(action),index:0,held:false,fill:0,retry:false};emit(s,"action-start",action.taskId,{choiceId:action.choice?.id,kind:action.kind}); }
+ if(s.handsOn&&!s.contextual&&!['correction','clear-hazard'].includes(action.kind)&&!(s.assessment&&s.chapterId==='preflight'&&action.choice?.defer))s.action.interaction={steps:actionSteps(action),index:0,held:false,fill:0,retry:false};emit(s,"action-start",action.taskId,{choiceId:action.choice?.id,kind:action.kind}); }
 const EPSILON = 1e-9;
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 function rng(seed) {
@@ -81,10 +81,14 @@ export function createState(options = {}) {
       handoff: false, deferred: false, warned: false, mistakes: 0
     };
   });
-  if(assessment){const row=chapterId==='boarding'?5:rows[5];tasks.push({id:'priority',kind:'priority',title:'優先處理判斷',row,side:'left',seat:`${row+1}B`,variant:0,x:0,z:WORLD.rows[row],active:true,done:false,assigned:false});}
+  if(assessment&&chapterId==='boarding'){const row=5;tasks.push({id:'priority',kind:'priority',title:'優先處理判斷',row,side:'left',seat:`${row+1}B`,variant:0,x:0,z:WORLD.rows[row],active:true,done:false,assigned:false});}
+  if(assessment&&chapterId==='preflight'){
+    const deadlines=rng(seed^0x6a09e667);
+    for(const t of tasks){t.patience=35+Math.floor(deadlines()*31);t.deadlineAt=t.spawn+t.patience;}
+  }
   const s = {
     runId: `run-${++runSerial}`, eventSeq:0, events:[], actionSerial:0,
-    chapter: chapter.order, chapterId: chapter.id, phase:chapter.phase, seed, handsOn: !!handsOn, contextual: !!contextual, practice: !!practice, assessment: !!assessment, status: 'briefing', elapsed: 0, duration: chapter.duration,
+    chapter: chapter.order, chapterId: chapter.id, phase:chapter.phase, seed, handsOn: !!handsOn, contextual: !!contextual, practice: !!practice, assessment: !!assessment, status: 'briefing', elapsed: 0, penaltySeconds:0, duration: chapter.duration,
     characterMemory:options?.characterMemory&&typeof options.characterMemory==='object'?options.characterMemory:{},
     cameraMode: 'follow', reducedMotion: false,
     player: { x: 0, z: 1.5, angle: 0, walking: false, step: 0 },
@@ -127,7 +131,7 @@ export function counts(s) {
   };
 }
 export function chapterReady(s) {
-  if(s.assessment)return !s.action&&!s.answerFeedback&&s.tasks.every(t=>t.assessmentAnswered);
+  if(s.assessment)return !s.action&&!s.answerFeedback&&!s.handoffJob&&s.tasks.every(t=>t.assessmentAnswered&&(!(s.chapterId==='preflight'&&s.judgments.find(j=>j.taskId===t.id)?.firstChoice.good)||t.done));
   if(s.practice&&s.chapterId==='preflight')return s.tasks.every(t=>t.done)&&s.hazards.every(h=>h.done);
   if(s.boarding)return boardingReady(s);
   const c = counts(s);
@@ -229,7 +233,7 @@ export function interact(s) {
   if (s.near === 'report') {
     if (!chapterReady(s)) {
       const c = counts(s); s.reportAttempted = true;
-      if(s.assessment){feedback(s,`還有 ${s.tasks.filter(t=>!t.assessmentAnswered).length} 題未作答，全部作答後再提交。`);return false;}
+      if(s.assessment){feedback(s,s.handoffJob?'同事仍在送物，請確認送達後再提交。':`還有 ${s.tasks.filter(t=>!t.assessmentAnswered).length} 題未作答或處置未完成，完成後再提交。`);return false;}
       feedback(s, s.boarding?`尚有 ${s.boarding.actors.filter(a=>!['seated','exited'].includes(a.status)).length} 位旅客未到位；完成所有需求、讓走道淨空後再回報。`:s.phase==='final-cabin-check'?(s.practice?`尚需完成 ${s.tasks.filter(t=>!t.done).length} 項任務、清除 ${c.hazards} 件走道事件；一般需求須記錄為起飛後協助。`:`尚需確認 ${s.tasks.filter(t=>t.kind==='safety').length-c.safety} 項安全檢查、清除 ${c.hazards} 件走道事件；普通服務不必送達才能回報。`):`尚需檢查 ${s.tasks.filter(t=>t.kind==='safety').length - c.safety} 項、需求 ${s.tasks.filter(t=>t.kind==='service').length - c.service} 個、走道 ${c.hazards} 件；完成後再回報。`, 'warning'); return false;
     }
     finish(s, 'complete'); return true;
@@ -272,8 +276,11 @@ export function choose(s, index) {
       feedback(s,t.id==='priority'?'優先序判斷正確，已記錄。':`回答正確，正在執行：${choice.label}。`,'good');
       updateNear(s);
     }else{
+      s.penaltySeconds+=5;
+      emit(s,'time-penalty',t.id,{seconds:5});
+      if(s.duration-s.elapsed-s.penaltySeconds<=EPSILON){assessmentDeadlineTick(s);finish(s,'timeout');return true;}
       s.answerFeedback={taskId:t.id,good:false,choice,reply:assessmentRetort(t)};
-      feedback(s,'回答錯誤，正確做法將於結算講評。','warning');
+      feedback(s,'回答錯誤，總剩餘時間扣除 5 秒；正確做法將於結算講評。','warning');
     }
     return true;
   }
@@ -378,6 +385,7 @@ function penalizeService(s, amount) {
 function creditService(s, amount) { s.comfort = clamp(s.comfort + amount, 0, Math.max(0, 100 - s.servicePenalty)); }
 function completeTask(s, t, handoff = false, deferred = false) {
   if(!t||t.done)return;
+  if(s.assessment&&s.chapterId==='preflight'&&s.elapsed>t.deadlineAt+EPSILON)markAssessmentLate(s,t);
   if(s.boarding)boardingTaskComplete(s,t);
   t.done = true; t.assigned = false; t.handoff = handoff; t.deferred=deferred;
   if(deferred){t.acknowledged=true;t.warned=false;}
@@ -404,6 +412,22 @@ function finishAction(s) {
 
   }
   updateNear(s);
+}
+function markAssessmentLate(s,t) {
+  if(t.late)return;
+  t.late=true;emit(s,'task-late',t.id,{points:10});
+  feedback(s,`${t.title} 好感倒數歸零，結算扣 10 分；仍可完成任務。`,'warning');
+}
+function assessmentDeadlineTick(s) {
+  if(!s.assessment||s.chapterId!=='preflight')return;
+  for(const t of s.tasks){
+    if(!t.active||t.done||t.late)continue;
+    if(s.elapsed+EPSILON>=t.deadlineAt){
+      markAssessmentLate(s,t);
+    }else if(!t.warned&&s.elapsed+EPSILON>=t.deadlineAt-10){
+      t.warned=true;feedback(s,`${t.title} 好感倒數剩 10 秒，完成任務可避免逾時扣分。`,'warning');
+    }
+  }
 }
 function demandTick(s) {
   for (const t of s.tasks) {
@@ -434,17 +458,17 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
   const timedDecision=s.assessment||s.phase==='final-cabin-check'&&!s.practice;
   if (s.status !== 'playing' || (s.dialog&&!timedDecision) || s.lesson || s.recovery?.ready || !Number.isFinite(dt) || dt <= 0) return;
   dt = Math.min(dt, .1);
-  if(!s.boarding||s.boarding.formal)s.elapsed = s.practice ? s.elapsed + dt : Math.min(s.duration, s.elapsed + dt);
-  if(!s.practice){s.timeWarned??=[];for(const level of [30,10])if(s.duration-s.elapsed<=level&&!s.timeWarned.includes(level)){s.timeWarned.push(level);s.timeWarnedAt??={};s.timeWarnedAt[level]=s.elapsed;emit(s,'time-warning',null,{level});}}
+  if(!s.boarding||s.boarding.formal)s.elapsed = s.practice ? s.elapsed + dt : Math.min(s.duration-(s.penaltySeconds||0), s.elapsed + dt);
+  if(!s.practice){s.timeWarned??=[];for(const level of [30,10])if(s.duration-s.elapsed-(s.penaltySeconds||0)<=level&&!s.timeWarned.includes(level)){s.timeWarned.push(level);s.timeWarnedAt??={};s.timeWarnedAt[level]=s.elapsed;emit(s,'time-warning',null,{level});}}
   // Deadline evaluation deliberately precedes demand, handoff, and action credit.
-  if (!s.practice && s.elapsed + EPSILON >= s.duration) {
-    s.elapsed = s.duration; finish(s, 'timeout'); return;
+  if (!s.practice && s.elapsed+(s.penaltySeconds||0) + EPSILON >= s.duration) {
+    s.elapsed = s.duration-(s.penaltySeconds||0);assessmentDeadlineTick(s);finish(s, 'timeout'); return;
   }
   if(s.correctFeedback){s.correctFeedback.remaining=Math.max(0,s.correctFeedback.remaining-dt);if(s.correctFeedback.remaining<=EPSILON)s.correctFeedback=null;}
   if(!s.boarding)demandTick(s);
   if (s.lesson) { updateNear(s); return; }
   if (s.handoffJob) {
-    if(s.phase==='final-cabin-check'){
+    if(s.phase==='final-cabin-check'&&!(s.assessment&&s.chapterId==='preflight')){
       completeTask(s,s.tasks.find(t=>t.id===s.handoffJob.taskId),true,true);s.handoffJob=null;
       feedback(s,'同事已記錄需求，起飛後協助；最後安全檢查期間不會取物或送達。','good');
     }else{
@@ -461,6 +485,7 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
     else {s.action.time = Math.min(s.action.duration, s.action.time + dt);
     if (s.action.duration - s.action.time <= EPSILON) { s.action.time = s.action.duration; finishAction(s); }}
   } else move(s, input?.x, input?.z, dt);
+  assessmentDeadlineTick(s);
   for (const h of s.hazards) {
     if (h.collisionPending && !rectBlocked(s.player.x, s.player.z, -.38, .38, h.z - .34, h.z + .34)) h.collisionPending = false;
   }

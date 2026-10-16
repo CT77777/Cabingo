@@ -1,4 +1,4 @@
-import {assessmentSummary} from './assessment.mjs?v=ch2-actions-1';
+import {assessmentSummary} from './assessment.mjs?v=ch2-deadlines-2';
 export function summarizeResult(s) {
   if(s.assessment){const result=assessmentSummary(s);return {stars:result.stars,title:result.title,advice:'查看各題首次判斷，再針對錯題練習。',record:null};} // Legacy records never mix with assessment records.
   const complete=s.endReason==='complete'&&s.grade!=='incomplete';

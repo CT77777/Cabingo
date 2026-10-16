@@ -1,9 +1,9 @@
-import {preflightDecision} from './preflight-decisions.mjs?v=ch2-actions-2';
+import {preflightDecision} from './preflight-decisions.mjs?v=ch2-deadlines-2';
 // Fictional scenario decisions, pending instructor review. These are not SOPs.
 export const ASSESSMENT_VERSION=2;
-export const assessmentVersion=chapterId=>chapterId==='preflight'?3:ASSESSMENT_VERSION;
+export const assessmentVersion=chapterId=>chapterId==='preflight'?4:ASSESSMENT_VERSION;
 export const ASSESSMENT_SCOPE='每題只能作答一次，結束後統一講評。不執行處置或模擬服務等待；全部作答後回前方提交答案。這是待專業審閱的情境判斷測驗，不代表公司正式考核。';
-export const assessmentScope=state=>`${state.duration} 秒 · ${state.tasks.length} 題。${state.chapterId==='preflight'?'每題只能作答一次。答對後執行處置；答錯顯示紅叉與旅客回覆，正確做法留到結算講評。完成作答及處置後回前方提交；行李未收妥時可繞行。':ASSESSMENT_SCOPE}`;
+export const assessmentScope=state=>`${state.duration} 秒 · ${state.tasks.length} 題。${state.chapterId==='preflight'?'每題只能作答一次，答錯扣 5 秒。各任務有 35～65 秒隨機好感倒數，完成前歸零每項扣 10 分；自行記錄需 3 秒，同事協助每局一次、送達才完成。滿分 100 分；100 分 3 星、80～99 分 2 星，其餘正分 1 星；安全相關答錯或未完整提交為 0 星。完成作答與處置後回前方提交。':ASSESSMENT_SCOPE}`;
 
 export function assessmentDecision(task,chapterId='preflight',state={}) {
   if(chapterId==='preflight'&&task.id!=='priority')return preflightDecision(task,state);
@@ -78,13 +78,16 @@ export function assessmentSummary(state) {
     return {total:expected.length,answered:answers.length,correct:answers.filter(j=>j.firstChoice?.good).length,incorrect:answers.filter(j=>j.firstChoice?.good===false).length};
   };
   const safety=category('safety'),service=category('service'),priority=category('priority');
-  const submitted=state.endReason==='complete'&&tasks.length>0&&tasks.every(t=>judgments.some(j=>j.taskId===t.id&&j.firstChoice));
+  const ch2=state.assessment&&state.chapterId==='preflight';
+  const submitted=state.endReason==='complete'&&tasks.length>0&&tasks.every(t=>judgments.some(j=>j.taskId===t.id&&j.firstChoice))&&(!ch2||!state.action&&!state.handoffJob&&tasks.every(t=>!judgments.find(j=>j.taskId===t.id)?.firstChoice.good||t.done));
   const incorrect=judgments.filter(j=>j.firstChoice?.good===false).length;
   const safetyErrors=judgments.filter(j=>j.firstChoice?.good===false&&(tasks.find(t=>t.id===j.taskId)?.kind==='safety'||j.safetyIncorrect>0)).length;
-  const stars=!submitted||safetyErrors?0:incorrect===0?3:incorrect===1?2:1;
-  const title=!submitted?'模擬結束，作答尚未完整提交。':safetyErrors?'安全判斷需要再練習。':incorrect?'安全相關題答對，其他判斷再練習。':'本次情境首次作答全對。';
-  const record=state.assessment&&submitted&&stars>0?{chapterId:state.chapterId,questionVersion:assessmentVersion(state.chapterId),total:tasks.length,stars,incorrect,safetyErrors,elapsed:state.elapsed}:null;
-  return {safety,service,priority,submitted,incorrect,safetyErrors,stars,title,record};
+  const lateTasks=ch2?tasks.filter(t=>t.late):[],answerScore=ch2?judgments.filter(j=>j.firstChoice?.good).length*20:null,latePenalty=lateTasks.length*10;
+  const score=ch2?Math.max(0,answerScore-latePenalty):null;
+  const stars=!submitted||safetyErrors?0:ch2?(score===100?3:score>=80?2:score>0?1:0):incorrect===0?3:incorrect===1?2:1;
+  const title=!submitted?'模擬結束，作答尚未完整提交。':safetyErrors?'安全判斷需要再練習。':lateTasks.length?'作答已提交，留意各任務的完成期限。':incorrect?'安全相關題答對，其他判斷再練習。':'本次情境首次作答全對。';
+  const record=state.assessment&&submitted&&stars>0?{chapterId:state.chapterId,questionVersion:assessmentVersion(state.chapterId),total:tasks.length,stars,incorrect,safetyErrors,elapsed:state.elapsed,...(ch2?{score,late:lateTasks.length}:{} )}:null;
+  return {safety,service,priority,submitted,incorrect,safetyErrors,stars,title,record,score,answerScore,latePenalty,lateTasks,penaltySeconds:state.penaltySeconds||0};
 }
 
 export function assessmentFeedback(state) {
