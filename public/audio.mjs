@@ -1,51 +1,49 @@
-// Original synthesized cabin sound. No audio file or network dependency.
-export function createCabinAudio({contextFactory=()=>new (globalThis.AudioContext||globalThis.webkitAudioContext)(),onUnavailable=()=>{},onMusicUnavailable=()=>{}}={}) {
-  let context=null,master=null,status='locked',mode='silent',muted=false,volume=.4,epoch=0,pending=null,runId='',musicVolume=.35,musicBuffer=null,musicFailed=false;
-  const voices=new Set(),ambient=new Set(),music=new Set(),seen=new Set();
+// Synthesized interaction effects and locally hosted Carefree by Kevin MacLeod.
+// Music attribution and CC BY 4.0 license: THIRD_PARTY_NOTICES.txt.
+export function createCabinAudio({contextFactory=()=>new (globalThis.AudioContext||globalThis.webkitAudioContext)(),onUnavailable=()=>{},onMusicUnavailable=()=>{},fetcher=(...args)=>globalThis.fetch(...args)}={}) {
+  let context=null,master=null,status='locked',mode='silent',muted=false,volume=.4,epoch=0,pending=null,runId='',musicVolume=.35,musicBuffer=null,musicFailed=false,musicPending=null;
+  const musicAbort=new AbortController();
+  const voices=new Set(),music=new Set(),seen=new Set();
   const stop=record=>{
     for(const source of record.sources){try{source.stop();}catch{}try{source.disconnect();}catch{}}
     for(const node of record.nodes){try{node.disconnect();}catch{}}
-    voices.delete(record);ambient.delete(record);music.delete(record);
+    voices.delete(record);music.delete(record);
   };
-  const stopAll=()=>{for(const r of [...voices,...ambient,...music])stop(r);};
+  const stopAll=()=>{for(const r of [...voices,...music])stop(r);};
   function unavailable(){stopAll();status='unavailable';try{onUnavailable();}catch{}}
   function gainTo(node,value,seconds=.08){const t=context.currentTime;node.gain.cancelScheduledValues(t);node.gain.setTargetAtTime(value,t,seconds/3);}
-  function updateAmbience(){
-    const allowed=status==='ready'&&!muted&&volume>0&&['playing','reading'].includes(mode);
-    if(!allowed){for(const r of [...ambient])stop(r);return;}
-    if(ambient.size)return;
-    const mix=context.createGain();mix.gain.value=mode==='reading'?.022:.055;mix.connect(master);
-    const hum=context.createOscillator();hum.type='sine';hum.frequency.value=83;hum.connect(mix);
-    const noise=context.createBufferSource(),buffer=context.createBuffer(1,context.sampleRate*2,context.sampleRate),data=buffer.getChannelData(0);
-    for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*.28;
-    noise.buffer=buffer;noise.loop=true;const filter=context.createBiquadFilter();filter.type='lowpass';filter.frequency.value=450;noise.connect(filter);filter.connect(mix);
-    ambient.add({sources:[hum,noise],nodes:[mix,filter]});hum.start();noise.start();
+  function musicUnavailable(){
+    if(status==='disposed')return;
+    musicFailed=true;musicBuffer=null;
+    for(const r of [...music])stop(r);
+    try{onMusicUnavailable();}catch{}
   }
-  // Original eight-bar lounge progression. A cached PCM loop avoids timer drift
-  // and creates no oscillators or recurring JS work while the game is running.
+  // Fetch and decode once, only after deliberate audio activation. Completion
+  // rechecks the current mode/preferences so a late load cannot bypass pause.
   function buildMusic(){
     const allowed=!musicFailed&&status==='ready'&&!muted&&volume>0&&musicVolume>0&&['playing','reading'].includes(mode);
     if(!allowed){for(const r of [...music])stop(r);return;}
-    if(music.size){for(const r of music)gainTo(r.nodes[0],musicVolume*(mode==='reading'?.07:.18));return;}
+    if(music.size){for(const r of music)gainTo(r.nodes[0],musicVolume*(mode==='reading'?.12:.30));return;}
     if(!musicBuffer){
-      const rate=16000,beat=.75,length=24;
-      musicBuffer=context.createBuffer(1,rate*length,rate);const data=musicBuffer.getChannelData(0);
-      const chords=[[48,55,59,64],[45,52,55,60],[50,57,60,65],[43,50,53,59],[48,55,59,62],[45,52,55,60],[50,57,60,64],[43,50,53,57]];
-      const note=(midi,start,duration,level)=>{const f=440*2**((midi-69)/12),count=Math.floor(duration*rate);
-        for(let n=0;n<count;n++){const t=n/rate,attack=Math.min(1,t/.012),tail=Math.min(1,(duration-t)/.08),envelope=attack*tail*Math.exp(-t*2.8);
-          const wave=Math.sin(2*Math.PI*f*t)+.27*Math.sin(4*Math.PI*f*t)+.08*Math.sin(6*Math.PI*f*t);
-          const index=(Math.floor(start*rate)+n)%data.length;data[index]+=wave*envelope*level;}
-      };
-      chords.forEach((chord,bar)=>{const start=bar*4*beat;
-        note(chord[0]-12,start,1.3,.20);note(chord[0]-12,start+2*beat,1.1,.12);
-        [0,2,1,3,2,1].forEach((n,i)=>note(chord[n]+12,start+i*.5*beat+((i%2)*.035),1.25,.12));
-      });
+      if(!musicPending)musicPending=(async()=>{
+        try{
+          const response=await fetcher(new URL('./assets/audio/carefree.mp3',import.meta.url),{signal:musicAbort.signal});
+          if(!response.ok)throw Error('Music request failed');
+          const bytes=await response.arrayBuffer();
+          if(status==='disposed')return;
+          const decoded=await context.decodeAudioData(bytes);
+          if(status==='disposed')return;
+          musicBuffer=decoded;updateMusic();
+        }catch{musicUnavailable();}
+        finally{musicPending=null;}
+      })();
+      return;
     }
     const source=context.createBufferSource(),mix=context.createGain();source.buffer=musicBuffer;source.loop=true;
-    mix.gain.value=musicVolume*(mode==='reading'?.07:.18);source.connect(mix);mix.connect(master);
+    mix.gain.value=musicVolume*(mode==='reading'?.12:.30);source.connect(mix);mix.connect(master);
     music.add({sources:[source],nodes:[mix]});source.start();
   }
-  function updateMusic(){try{buildMusic();}catch{musicFailed=true;musicBuffer=null;for(const r of [...music])stop(r);try{onMusicUnavailable();}catch{}}}
+  function updateMusic(){try{buildMusic();}catch{musicUnavailable();}}
   async function unlock(){
     if(status==='disposed'||status==='unavailable')return false;
     if(pending)return pending;
@@ -55,7 +53,7 @@ export function createCabinAudio({contextFactory=()=>new (globalThis.AudioContex
         if(!context){context=contextFactory();master=context.createGain();master.gain.value=muted?0:volume;master.connect(context.destination);}
         await context.resume();
         if(status==='disposed'||generation!==epoch)return false;
-        status='ready';updateAmbience();updateMusic();return true;
+        status='ready';updateMusic();return true;
       }catch{if(status!=='disposed')unavailable();return false;}
       finally{pending=null;}
     })();return pending;
@@ -82,10 +80,10 @@ export function createCabinAudio({contextFactory=()=>new (globalThis.AudioContex
   }
   return {unlock,play,
     setPreferences(p){muted=!!p.muted;if(Number.isFinite(p.musicVolume))musicVolume=Math.max(0,Math.min(1,p.musicVolume));volume=Number.isFinite(p.volume)?Math.max(0,Math.min(1,p.volume)):.4;
-      if(master&&status!=='disposed'){try{gainTo(master,muted?0:volume);updateAmbience();updateMusic();}catch{unavailable();}}},
+      if(master&&status!=='disposed'){try{gainTo(master,muted?0:volume);updateMusic();}catch{unavailable();}}},
     setMode(value){if(mode===value)return;mode=value;if(value==='paused')stopAll();
-      if(context&&status==='ready'){for(const r of ambient)gainTo(r.nodes[0],value==='reading'?.022:.055);try{updateAmbience();updateMusic();}catch{unavailable();}}},
-    reset(id){runId=id;seen.clear();stopAll();if(status==='ready')try{updateAmbience();updateMusic();}catch{unavailable();}},
-    dispose(){if(status==='disposed')return;epoch++;status='disposed';stopAll();try{master?.disconnect();Promise.resolve(context?.close()).catch(()=>{});}catch{}},
+      if(context&&status==='ready'){try{updateMusic();}catch{unavailable();}}},
+    reset(id){runId=id;seen.clear();stopAll();if(status==='ready')try{updateMusic();}catch{unavailable();}},
+    dispose(){if(status==='disposed')return;epoch++;status='disposed';musicAbort.abort();musicBuffer=null;stopAll();try{master?.disconnect();Promise.resolve(context?.close()).catch(()=>{});}catch{}},
     getStatus:()=>status};
 }

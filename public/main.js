@@ -3,7 +3,7 @@ import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissL
 import {retryCandidates,createRetry,retryPrompt,answerRetry,retryComparison} from './retry.mjs?v=0.7.3-retry-copy';
 import {BOARDING_TUTORIAL,boardingEvidence,boardingCoach,inspectBoardingClue} from './boarding.mjs?v=0.7.2';
 import {layoutLabels,crossedMilestones,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.7.2';
-import {createCabinAudio} from './audio.mjs?v=0.7.2';
+import {createCabinAudio} from './audio.mjs?v=carefree-1';
 import {summarizeResult,parseBest,selectBest,trainingFeedback} from './results.mjs?v=0.7.3-feedback';
 import {CHAPTERS,DEFAULT_CHAPTER_ID,getChapter,formatChapterLabel} from './chapters/index.mjs?v=0.7.2';
 import {CAMPAIGN_STORAGE_KEY,parseCampaign,recordChapterResult,selectCampaignChapter,updateCharacterMemory,prepareCampaignSave} from './campaign.mjs?v=0.7.2';

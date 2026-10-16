@@ -16,7 +16,7 @@ python3 -m http.server 4173 --bind 127.0.0.1 -d public
 
 瀏覽器必須支援 WebGL 2，且裝置與瀏覽器政策允許圖形加速。若無法建立 WebGL 場景，頁面會顯示錯誤提示與重新載入按鈕。
 
-不需要 `npm install`、帳號、API key、後端或 CDN。Three.js 已附在 `public/vendor/`，執行時不載入外部模型、貼圖或聲音。本版本使用自製合成環境音與事件音效，加入原創八小節鋼琴配樂，沒有語音配音或外部音檔。首次點擊開始後才啟用聲音；可在上方的同一組喇叭與滑桿靜音或調整總音量，在暫停選單獨立調整音樂音量；操作說明收在右上方 ⓘ。已閱讀的說明會存在此瀏覽器的 localStorage；拒絕儲存仍可遊玩。
+不需要 `npm install`、帳號、API key、後端或 CDN。Three.js 已附在 `public/vendor/`，執行時不向外部網站載入模型、貼圖或聲音。本版本使用自製合成事件音效，以及隨專案附帶的 Carefree — Kevin MacLeod（CC BY 4.0）錄音配樂；不播放機艙底噪。音樂在首次啟用後從本機載入，載入失敗不影響遊玩與操作音效。首次點擊開始後才啟用聲音；可在上方的同一組喇叭與滑桿靜音或調整總音量，在暫停選單獨立調整音樂音量；操作說明收在右上方 ⓘ。已閱讀的說明會存在此瀏覽器的 localStorage；拒絕儲存仍可遊玩。
 
 ## 操作與玩法
 
@@ -49,7 +49,8 @@ public/
   preflight.mjs               巡艙規則及可測試的遊戲狀態
   scene.js                    原創機艙幾何、鏡頭與動畫
   presentation.mjs            姿態、鏡頭、圖示避讓及動作音效里程碑
-  audio.mjs                   自製機艙環境音與事件音效
+  audio.mjs                   本機配樂播放與合成事件音效
+  assets/audio/carefree.mp3    Carefree — Kevin MacLeod（CC BY 4.0）
   results.mjs                 星等、改善建議及本機紀錄比較
   favicon.svg                 原創圖示
   THIRD_PARTY_NOTICES.txt      第三方與素材來源說明
