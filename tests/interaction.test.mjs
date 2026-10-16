@@ -1,3 +1,4 @@
+// Legacy service-phase engine coverage; final-cabin-check.test.mjs covers the current preflight policy.
 import assert from 'node:assert/strict';
 import {joystickVector,countdownPresentation} from '../public/interaction.mjs';
 assert.deepEqual(joystickVector(3,4,48),{x:0,y:0,knobX:3,knobY:4});
@@ -11,7 +12,7 @@ assert.equal(countdownPresentation({status:'playing',duration:100,elapsed:90}).l
 assert.equal(countdownPresentation({status:'playing',practice:true,duration:100,elapsed:90}).visible,false);
 console.log('PASS joystick deadzone/clamp/diagonal and countdown 30/10 second boundaries');
 const game=await import('../public/preflight.mjs');
-function startReady(s){game.start(s);if(s.lesson?.id==='serviceIntro')game.dismissLesson(s);}
+function startReady(s){s.phase='service-training';game.start(s);if(s.lesson?.id==='serviceIntro')game.dismissLesson(s);}
 for(const practice of [false,true]){
  const s=game.createState({seed:1,contextual:true,practice});startReady(s);const t=s.tasks.find(t=>t.id==='belt');s.player.z=t.z-.8;game.interact(s);
  const order=s.dialog.choices.map(c=>c.id);game.choose(s,s.dialog.choices.findIndex(c=>!c.good));

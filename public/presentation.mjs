@@ -43,7 +43,7 @@ export function crossedMilestones({actionId,taskId,choiceId,from,to}) {
   return threshold!==null&&from<threshold&&to>=threshold?[{id:`${actionId}:${taskId}`,type:taskId==='water'?'cup':taskId==='belt'?'buckle':'close'}]:[];
 }
 
-export const COWORKER_PHASE_LABELS=Object.freeze({idle:'待命',calling:'聯繫同事',acknowledging:'收到，正在取物',preparing:'從前艙取物',walking:'前往旅客',serving:'正在交付',complete:'已送達',returning:'已送達 · 返回工作位'});
+export const COWORKER_PHASE_LABELS=Object.freeze({idle:'待命',recorded:'需求已記錄',recording:'正在記錄需求',calling:'聯繫同事',acknowledging:'收到，正在取物',preparing:'從前艙取物',walking:'前往旅客',serving:'正在交付',complete:'已送達',returning:'已送達 · 返回工作位'});
 
 // One shared timeline drives the colleague, prop transfer and handoff HUD.
 export function coworkerPresentation(state={}) {
@@ -51,6 +51,7 @@ export function coworkerPresentation(state={}) {
   const task=job?tasks.find(t=>t.id===job.taskId):tasks.find(t=>t.handoff&&t.done);
   const home={x:.53,z:.7};
   if(!task)return {...home,phase:'idle',progress:0,taskId:null,carrying:false,transfer:0,walking:false};
+  if(state.phase==='final-cabin-check')return {...home,phase:task.deferred?'recorded':'recording',progress:task.deferred?1:0,taskId:task.id,carrying:false,transfer:0,walking:false,settled:true};
   const active=!!job,p=active?clamp((12-job.remaining)/12):1,age=active?0:Math.max(0,(state.elapsed||0)-(task.completedAt||0));
   const side=task.side==='right'?1:-1,dest={x:side*.53,z:task.z-.6};
   let phase,x=home.x,z=home.z,walking=false,carrying=false,transfer=0;
@@ -72,9 +73,10 @@ export function serviceItemPose({source,hand,dest,progress=0}={}){
  return {phase,item,open:p<.2?smooth(p/.2):p<.5?1:1-smooth((p-.5)/.2)};
 }
 
-// The cart stays within reach behind the crew; rendering and pickup share this anchor.
-export function trolleyPresentation(player={}){
+// Tray coordinates are local to the crew, in front of the supporting left hand.
+export const SERVICE_TRAY=Object.freeze({x:-.27,y:1.10,z:.39});
+export function serviceTrayPresentation(player={}){
  const x=Number.isFinite(player.x)?player.x:0,z=Number.isFinite(player.z)?player.z:1.5,angle=Number.isFinite(player.angle)?player.angle:0;
- const edge=z>2&&z<14?.54:2.5;
- return {x:Math.max(-edge,Math.min(edge,x-Math.sin(angle)*.43)),z:Math.max(.5,Math.min(15.3,z-Math.cos(angle)*.43)),angle};
+ const c=Math.cos(angle),s=Math.sin(angle);
+ return {x:x+SERVICE_TRAY.x*c+SERVICE_TRAY.z*s,y:.13+SERVICE_TRAY.y+.12,z:z-SERVICE_TRAY.x*s+SERVICE_TRAY.z*c,angle};
 }

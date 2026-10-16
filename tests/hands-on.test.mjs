@@ -1,6 +1,7 @@
+// Legacy service-phase engine coverage; final-cabin-check.test.mjs covers the current preflight policy.
 import assert from 'node:assert/strict';
 import * as game from '../public/preflight.mjs';
-function startReady(s){game.start(s);if(s.lesson?.id==='serviceIntro')game.dismissLesson(s);}
+function startReady(s){s.phase='service-training';game.start(s);if(s.lesson?.id==='serviceIntro')game.dismissLesson(s);}
 const s=game.createState({seed:7,handsOn:true,practice:true});startReady(s);
 const bag=s.tasks.find(t=>t.id==='bag');s.player.z=bag.z-.8;game.interact(s);game.choose(s,s.dialog.choices.findIndex(c=>c.good));
 assert(s.action.interaction);const before=s.action.time;for(let i=0;i<100;i++)game.tick(s,.05);assert.equal(s.action.time,before,'idle time does not complete hands-on work');

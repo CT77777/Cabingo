@@ -16,7 +16,7 @@ python3 -m http.server 4173 --bind 127.0.0.1 -d public
 
 瀏覽器必須支援 WebGL 2，且裝置與瀏覽器政策允許圖形加速。若無法建立 WebGL 場景，頁面會顯示錯誤提示與重新載入按鈕。
 
-不需要 `npm install`、帳號、API key、後端或 CDN。Three.js 已附在 `public/vendor/`，執行時不載入外部模型、貼圖或聲音。本版本使用自製合成環境音與事件音效，加入原創八小節鋼琴配樂，沒有語音配音或外部音檔。首次點擊開始後才啟用聲音；可在上方的同一組喇叭與滑桿靜音或調整總音量，在暫停選單獨立調整音樂音量；操作說明收在右上方 ⓘ。已閱讀的說明會存在此瀏覽器的 localStorage；拒絕儲存仍可遊玩。
+不需要 `npm install`、帳號、API key、後端或 CDN。Three.js 已附在 `public/vendor/`，執行時不向外部網站載入模型、貼圖或聲音。本版本使用自製合成事件音效，以及隨專案附帶的 Carefree — Kevin MacLeod（CC BY 4.0）錄音配樂；不播放機艙底噪。音樂在首次啟用後從本機載入，載入失敗不影響遊玩與操作音效。首次點擊開始後才啟用聲音；可在上方的同一組喇叭與滑桿靜音或調整總音量，在暫停選單獨立調整音樂音量；操作說明收在右上方 ⓘ。已閱讀的說明會存在此瀏覽器的 localStorage；拒絕儲存仍可遊玩。
 
 ## 操作與玩法
 
@@ -28,7 +28,7 @@ python3 -m http.server 4173 --bind 127.0.0.1 -d public
 - C / 鏡頭按鈕：切換跟隨鏡頭與全艙總覽
 - Esc / 暫停按鈕：暫停；ⓘ 按鈕：需要時查看操作說明
 - 離開視窗自動顯示全畫面暫停遮罩，回來後點擊繼續或按 Enter／空白鍵；不會自行恢復。原本已手動暫停時，先返回原暫停畫面
-- 正式巡艙有 100 秒行動時間；閱讀、說明、暫停與失焦不扣時
+- 正式巡艙有 100 秒行動時間；選擇答案與執行動作時持續倒數，教學說明、作答後修正說明、主動暫停與失焦不扣時。練習不倒數。正式巡艙的服務選項不顯示解題提示，練習保留說明；服務安排須完成所有需求紀錄才評為「做得好」，安全回報仍依安全條件判定
 - 不計時練習不計罰分，可先熟悉六個任務
 - 一次交接額度、各需求一次等候延長；安全失誤與服務修正保留至結算
 - 全部完成後必須在倒數結束前回前方回報
@@ -49,7 +49,8 @@ public/
   preflight.mjs               巡艙規則及可測試的遊戲狀態
   scene.js                    原創機艙幾何、鏡頭與動畫
   presentation.mjs            姿態、鏡頭、圖示避讓及動作音效里程碑
-  audio.mjs                   自製機艙環境音與事件音效
+  audio.mjs                   本機配樂播放與合成事件音效
+  assets/audio/carefree.mp3    Carefree — Kevin MacLeod（CC BY 4.0）
   results.mjs                 星等、改善建議及本機紀錄比較
   favicon.svg                 原創圖示
   THIRD_PARTY_NOTICES.txt      第三方與素材來源說明
@@ -118,3 +119,15 @@ npm run build
 機艙幾何、角色、圖示、情境邏輯與介面為此原型原創。沒有複製參考專案的程式碼、模型、角色、聲音或其他素材。完整來源說明見 [第三方聲明](public/THIRD_PARTY_NOTICES.txt)。
 
 唯一附帶的第三方執行期程式庫是 Three.js 0.180.0，使用 MIT License；完整授權保留於 [THREE-LICENSE.txt](public/vendor/THREE-LICENSE.txt)。該授權僅涵蓋對應的第三方程式碼。本專案的原創程式碼尚未指定開源授權。
+
+### 起飛前最後安全檢查的判定
+
+第二章明確採用最後安全檢查情境：三項安全確認與走道淨空才可回報，不要求普通服務已實際送達。一般飲水、保暖需求可自行或請同事記錄為起飛後協助；自行記錄需 3 秒，請同事記錄需 1 秒，每輪可請同事協助 1 次；兩者回饋相同，記錄後停止耐心計時，不產生取物、送達動畫。未回應的需求仍可能因等候造成走道事件。各安全項目間沒有固定處理順序。
+
+這是遊戲訓練設計，不代表法規一律禁止遞毛毯；本章沒有醫療或緊急需求，實際事件應依航空公司程序處理。依據包括臺灣《航空器飛航作業管理規則》第 46、48 條、EASA CAT.OP.MPA.225／230，以及美國 14 CFR 121.577；各地規範的適用範圍不同，並非統一的航空公司 SOP。
+
+- 臺灣法規：https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=K0090041
+- EASA：https://www.easa.europa.eu/en/document-library/easy-access-rules/online-publications/easy-access-rules-air-operations?erules-id=ERULES-1963177438-12875
+- 美國飲食與設備收妥規定：https://www.ecfr.gov/current/title-14/chapter-I/subchapter-G/part-121/subpart-T/section-121.577
+
+新版個人最佳另存 `cabin3d-best-final-check-v1`，保留舊版 `cabin3d-best-v1`，不直接比較不同判定規則。教學記憶改存 `cabin3d-lessons-v3`，匯入舊版未變動的教學記憶，重新顯示已變更的安全檢查／服務安排說明。

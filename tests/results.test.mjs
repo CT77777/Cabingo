@@ -1,3 +1,4 @@
+// Legacy service-phase engine coverage; final-cabin-check.test.mjs covers the current preflight policy.
 import assert from 'node:assert/strict';
 import {summarizeResult,parseBest,selectBest,trainingFeedback} from '../public/results.mjs';
 import {createState,start,interact,choose,tick,dismissLesson,ackRecovery} from '../public/preflight.mjs';
@@ -13,7 +14,7 @@ for(const patch of [{endReason:'timeout',grade:'incomplete'},{safetyErrors:2}])a
 assert.equal(parseBest(JSON.stringify({...r,stars:0})),null,'discard legacy failed best record');
 
 function trainingRun(options={}) {
-  const state=createState({seed:1,contextual:true,practice:true,...options});start(state);
+  const state=createState({seed:1,contextual:true,practice:true,...options});state.phase='service-training';start(state);
   if(state.lesson)dismissLesson(state);
   return state;
 }

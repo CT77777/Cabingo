@@ -1,5 +1,5 @@
 import {initBoarding,tickBoarding,boardingChoices,boardingPassable,boardingTaskComplete,boardingReady,boardingTaskActor} from './boarding.mjs?v=0.7.2';
-import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=0.7.2';
+import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=recording-time-1';
 
 // Pure, deterministic preflight game state. This is a fictional game,
 // not aviation training or a representation of real operating procedures.
@@ -20,7 +20,7 @@ export function readEvents(s,cursor) {
 }
 function actionSteps(a) {
   const tap=label=>({label,mode:'tap'}),hold=label=>({label,mode:'hold'});
-  if(a.kind==='clear-hazard')return [tap('招呼旅客'),hold('引導旅客返回座位')];
+  if(a.choice?.defer)return [tap(a.choice.handoff?'交接起飛後需求紀錄':'記錄需求並說明起飛後協助')];
   if(a.kind==='handoff')return [tap('呼叫同事'),tap('確認交接內容')];
   if(a.kind==='wait')return [tap('向旅客說明等候安排')];
   const id=a.choice?.id;
@@ -33,8 +33,9 @@ function actionSteps(a) {
   return [tap(id==='ask'?'向同事確認消息':'查看資訊板'),tap('向旅客回覆')];
 }
 function beginAction(s, action) { s.action={...action,id:++s.actionSerial};
- if(s.contextual&&action.kind!=='correction')s.action.duration=action.kind==='clear-hazard'||action.taskId==='bag'&&action.choice?.id!=='check'?2:action.choice?.id==='check'||action.kind==='wait'?.8:action.kind==='handoff'?1:action.choice?.id==='serve'?3:1.5;
- if(s.handsOn&&!s.contextual&&action.kind!=='correction')s.action.interaction={steps:actionSteps(action),index:0,held:false,fill:0,retry:false};emit(s,"action-start",action.taskId,{choiceId:action.choice?.id,kind:action.kind}); }
+ // Deferred recording uses the choice duration so delegation saves player time.
+ if(s.contextual&&action.kind!=='correction'&&!action.choice?.defer)s.action.duration=action.kind==='clear-hazard'||action.taskId==='bag'&&action.choice?.id!=='check'?2:action.choice?.id==='check'||action.kind==='wait'?.8:action.kind==='handoff'?1:action.choice?.id==='serve'?3:1.5;
+ if(s.handsOn&&!s.contextual&&!['correction','clear-hazard'].includes(action.kind))s.action.interaction={steps:actionSteps(action),index:0,held:false,fill:0,retry:false};emit(s,"action-start",action.taskId,{choiceId:action.choice?.id,kind:action.kind}); }
 const EPSILON = 1e-9;
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 function rng(seed) {
@@ -73,12 +74,12 @@ export function createState(options = {}) {
       variant: d.variant ?? Math.floor(random() * 3), x: 0, z: WORLD.rows[row],
       spawn: d.spawn ?? 0, active: d.kind === 'safety' || d.spawn === 0,
       done: false, assigned: false, late: false, acknowledged: false,
-      handoff: false, warned: false, mistakes: 0
+      handoff: false, deferred: false, warned: false, mistakes: 0
     };
   });
   const s = {
     runId: `run-${++runSerial}`, eventSeq:0, events:[], actionSerial:0,
-    chapter: chapter.order, chapterId: chapter.id, seed, handsOn: !!handsOn, contextual: !!contextual, practice: !!practice, status: 'briefing', elapsed: 0, duration: chapter.duration,
+    chapter: chapter.order, chapterId: chapter.id, phase:chapter.phase, seed, handsOn: !!handsOn, contextual: !!contextual, practice: !!practice, status: 'briefing', elapsed: 0, duration: chapter.duration,
     characterMemory:options?.characterMemory&&typeof options.characterMemory==='object'?options.characterMemory:{},
     cameraMode: 'follow', reducedMotion: false,
     player: { x: 0, z: 1.5, angle: 0, walking: false, step: 0 },
@@ -115,7 +116,7 @@ export function counts(s) {
 export function chapterReady(s) {
   if(s.boarding)return boardingReady(s);
   const c = counts(s);
-  return s.tasks.every(t=>t.done) && c.hazards === 0;
+  return s.tasks.filter(t=>s.phase!=='final-cabin-check'||t.kind==='safety').every(t=>t.done) && c.hazards === 0;
 }
 export function targets(s) {
   return [
@@ -165,7 +166,7 @@ export function canStand(s, x, z) {
   return true;
 }
 export function move(s, dx, dz, dt) {
-  if (s.status !== 'playing' || s.dialog || s.lesson || s.recovery || s.action&&!s.action.escort || !Number.isFinite(dt) || dt <= 0) { s.player.walking = false; return false; }
+  if (s.status !== 'playing' || s.dialog || s.lesson || s.recovery || s.action || !Number.isFinite(dt) || dt <= 0) { s.player.walking = false; return false; }
   dx = Number.isFinite(dx) ? dx : 0; dz = Number.isFinite(dz) ? dz : 0;
   if (!dx && !dz) { s.player.walking = false; return false; }
   dt = Math.min(dt, .1);
@@ -212,6 +213,17 @@ function choicesFor(s, t) {
     quote = '大概何時出發？'; description = `資訊板：${known ? '預估稍後，時間可能調整。' : '目前沒有確認的預估。'}`;
     choices = [mk('estimate', '預估稍後，可能調整', known, 4), mk('unknown', '還沒確定，有消息告訴您', !known, 4), mk('ask', '向同事確認最新消息', true, 9)];
     choices.forEach(c => { c.feedback = c.good ? '旅客收到與資訊板一致的回覆。' : known ? '資訊板已有預估、仍可能調整；這句回覆漏掉了已知資訊。' : '資訊板還沒有確認的預估；現在不能提供出發時間。'; });
+  } else if(s.phase==='final-cabin-check'&&t.kind==='service') {
+    const available=s.handoffTokens>0&&!s.handoffJob;
+    const blocked=s.hazards.some(h=>!h.done)||s.tasks.some(t=>t.id==='bag'&&!t.done&&t.variant!==2);
+    quote=t.id==='water'?'可以給我一杯水嗎？':'可以給我一條毯子嗎？';
+    description=`目前是起飛前最後安全檢查，這是一般${t.id==='water'?'飲水':'保暖'}需求，沒有醫療或緊急情況。${blocked?'走道仍有阻礙，須先排除。':'仍須確認客艙安全後回報。'}本章將普通服務記錄為起飛後處理；這是情境訓練設定，不代表法規一律禁止遞毛毯。`;
+    const feedback='需求已記錄，起飛後再協助；旅客留在座位，不再計算等候耐心。記錄需求不等於物品已送達。';
+    choices=[
+      mk('wait','記錄需求，起飛後再協助',true,3,{ack:true,defer:true,feedback}),
+      mk('serve',t.id==='water'?'先送水，再繼續安全檢查':'先拿毯子，再繼續安全檢查',false,3,{safetyError:true,feedback:'本章正在起飛前最後安全檢查；普通需求先記錄延後，不應中斷安全確認。這是本章情境規則，醫療或緊急需求另依程序處理。'})
+    ];
+    if(available)choices.push(mk('handoff','請同事記錄，起飛後再協助',true,1,{handoff:true,defer:true,feedback:'同事已接下需求紀錄，起飛後再協助；現在不會取物或送達，安全檢查仍須完成。'}));
   } else {
     const urgent = s.tasks.find(x => x.id === 'bag' && !x.done && x.variant !== 2);
     const available = s.handoffTokens > 0 && !s.handoffJob;
@@ -241,13 +253,12 @@ export function interact(s) {
   const hazard = s.hazards.find(h => h.id === s.near && !h.done);
   if (hazard) {
     beginAction(s, { kind: 'clear-hazard', taskId: hazard.taskId, hazardId: hazard.id, time: 0, duration: 5, choice: null });
-    if(s.contextual){const goal=escortGoal(s,hazard);if(goal)s.action.escort={goal,walked:0,initialDistance:Math.hypot(goal.x-s.player.x,goal.z-s.player.z)};}
     s.player.walking = false; feedback(s, `走道旅客 · 協助旅客返回座位，恢復走道。`); return true;
   }
   if (s.near === 'report') {
     if (!chapterReady(s)) {
       const c = counts(s); s.reportAttempted = true;
-      feedback(s, s.boarding?`尚有 ${s.boarding.actors.filter(a=>!['seated','exited'].includes(a.status)).length} 位旅客未到位；完成所有需求、讓走道淨空後再回報。`:`尚需檢查 ${s.tasks.filter(t=>t.kind==='safety').length - c.safety} 項、需求 ${s.tasks.filter(t=>t.kind==='service').length - c.service} 個、走道 ${c.hazards} 件；完成後再回報。`, 'warning'); return false;
+      feedback(s, s.boarding?`尚有 ${s.boarding.actors.filter(a=>!['seated','exited'].includes(a.status)).length} 位旅客未到位；完成所有需求、讓走道淨空後再回報。`:s.phase==='final-cabin-check'?`尚需確認 ${s.tasks.filter(t=>t.kind==='safety').length-c.safety} 項安全檢查、清除 ${c.hazards} 件走道事件；普通服務不必送達才能回報。`:`尚需檢查 ${s.tasks.filter(t=>t.kind==='safety').length - c.safety} 項、需求 ${s.tasks.filter(t=>t.kind==='service').length - c.service} 個、走道 ${c.hazards} 件；完成後再回報。`, 'warning'); return false;
     }
     finish(s, 'complete'); return true;
   }
@@ -309,7 +320,7 @@ export function choose(s, index) {
   } else {
     if(!choice.ack&&!choice.handoff)emit(s,'correct',t.id);
     beginAction(s, { kind: choice.handoff ? 'handoff' : choice.ack ? 'wait' : 'task', taskId: t.id, time: 0, duration: choice.duration, choice });
-    feedback(s, t.kind === 'safety' ? '依眼前情境完成確認…' : choice.handoff ? '聯繫同事交接，完成後仍需等候送達…' : choice.ack ? '正在說明等候安排…' : '正在協助旅客…');
+    feedback(s, t.kind === 'safety' ? '依眼前情境完成確認…' : choice.defer ? (choice.handoff?'正在向同事交接起飛後需求紀錄…':'正在記錄需求並說明起飛後協助…') : choice.handoff ? '聯繫同事交接，完成後仍需等候送達…' : choice.ack ? '正在說明等候安排…' : '正在協助旅客…');
   }
   return true;
 }
@@ -357,10 +368,13 @@ function penalizeService(s, amount) {
   s.comfort = clamp(s.comfort - amount, 0, Math.max(0, 100 - s.servicePenalty));
 }
 function creditService(s, amount) { s.comfort = clamp(s.comfort + amount, 0, Math.max(0, 100 - s.servicePenalty)); }
-function completeTask(s, t, handoff = false) {
+function completeTask(s, t, handoff = false, deferred = false) {
+  if(!t||t.done)return;
   if(s.boarding)boardingTaskComplete(s,t);
-  t.done = true; t.assigned = false; t.handoff = handoff; t.completedAt = s.elapsed; s.completed++; emit(s,'complete',t.id,{handoff});
-  if (t.kind === 'service') creditService(s, s.boarding?(t.late?3:10):handoff ? (t.late ? 1 : 3) : (t.late ? 3 : 7));
+  t.done = true; t.assigned = false; t.handoff = handoff; t.deferred=deferred;
+  if(deferred){t.acknowledged=true;t.warned=false;}
+  t.completedAt = s.elapsed; s.completed++; emit(s,'complete',t.id,{handoff,deferred});
+  if (t.kind === 'service') creditService(s,deferred?8:s.boarding?(t.late?3:10):handoff ? (t.late ? 1 : 3) : (t.late ? 3 : 7));
 }
 function finishAction(s) {
   const a = s.action, t = s.tasks.find(t => t.id === a.taskId);
@@ -368,10 +382,14 @@ function finishAction(s) {
   if (a.kind === 'clear-hazard') {
     const h = s.hazards.find(h => h.id === a.hazardId);
     if (h && !h.done) { h.done = true;h.returnedAt=s.elapsed; s.hazardsCleared++; emit(s,'hazard-clear',h.taskId); }
-    feedback(s, '走道已恢復。原本的服務需求仍需處理，紅色事件不等於已送達。', 'good');
+    feedback(s, s.phase==='final-cabin-check'?'走道已恢復。一般服務需求可記錄為起飛後協助，回座不等於送達。':'走道已恢復。原本的服務需求仍需處理，紅色事件不等於已送達。', 'good');
   } else if (a.kind === 'correction') {if(s.recovery)s.recovery.ready=true;feedback(s, `${a.choice.feedback} 可按空白鍵 重選；本次失誤仍保留。`, 'warning');}
   else if (t) {
-    if (a.choice.ack) { t.acknowledged = true; t.patience += 12; t.warned = false; }
+    if(a.choice.defer&&s.phase==='final-cabin-check'){
+      if(a.choice.handoff)s.handoffTokens=Math.max(0,s.handoffTokens-1);
+      completeTask(s,t,!!a.choice.handoff,true);
+    }
+    else if (a.choice.ack) { t.acknowledged = true; t.patience += 12; t.warned = false; }
     else if (a.choice.handoff) { s.handoffTokens--; t.assigned = true; s.handoffJob = { taskId: t.id, remaining: 12 }; }
     else completeTask(s, t);
     feedback(s, a.choice.feedback, 'good');
@@ -404,7 +422,8 @@ function finish(s, reason) {
   feedback(s, reason === 'complete' ? '巡艙回報完成。' : '行動時間已用完，查看本輪回顧。', s.grade === 'clean' || s.grade === 'recovered' ? 'good' : 'warning');
 }
 export function tick(s, dt, input = { x: 0, z: 0 }) {
-  if (s.status !== 'playing' || s.dialog || s.lesson || s.recovery?.ready || !Number.isFinite(dt) || dt <= 0) return;
+  const timedDecision=s.phase==='final-cabin-check'&&!s.practice;
+  if (s.status !== 'playing' || (s.dialog&&!timedDecision) || s.lesson || s.recovery?.ready || !Number.isFinite(dt) || dt <= 0) return;
   dt = Math.min(dt, .1);
   if(!s.boarding||s.boarding.formal)s.elapsed = s.practice ? s.elapsed + dt : Math.min(s.duration, s.elapsed + dt);
   if(!s.practice){s.timeWarned??=[];for(const level of [30,10])if(s.duration-s.elapsed<=level&&!s.timeWarned.includes(level)){s.timeWarned.push(level);s.timeWarnedAt??={};s.timeWarnedAt[level]=s.elapsed;emit(s,'time-warning',null,{level});}}
@@ -415,23 +434,22 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
   if(!s.boarding)demandTick(s);
   if (s.lesson) { updateNear(s); return; }
   if (s.handoffJob) {
+    if(s.phase==='final-cabin-check'){
+      completeTask(s,s.tasks.find(t=>t.id===s.handoffJob.taskId),true,true);s.handoffJob=null;
+      feedback(s,'同事已記錄需求，起飛後協助；最後安全檢查期間不會取物或送達。','good');
+    }else{
     s.handoffJob.remaining = Math.max(0, s.handoffJob.remaining - dt);
     if (s.handoffJob.remaining <= EPSILON) {
       const t = s.tasks.find(t => t.id === s.handoffJob.taskId);
       completeTask(s, t, true); s.handoffJob = null;
       feedback(s, `${t.title}：同事已完成需求。交接名額不會恢復。`, 'good');
-    }
+    }}
   }
   if (s.action) {
-    if(s.action.escort){
-      const a=s.action,old={x:s.player.x,z:s.player.z};move(s,input?.x,input?.z,dt);a.escort.walked+=Math.hypot(s.player.x-old.x,s.player.z-old.z);
-      const h=s.hazards.find(h=>h.id===a.hazardId),goal=a.escort.goal;
-      if(!h||Math.hypot(s.player.x-h.x,s.player.z-h.z)>2.1||!canStand(s,goal.x,goal.z))cancelEscort(s);
-      else if(a.escort.walked>=.4&&Math.hypot(s.player.x-goal.x,s.player.z-goal.z)<=.22)finishAction(s);
-    }else{ s.player.walking = false;
+    s.player.walking = false;
     if(s.action.interaction){const i=s.action.interaction;if(i.held){i.fill=Math.min(1.2,i.fill+dt);updateActionProgress(s.action);}}
     else {s.action.time = Math.min(s.action.duration, s.action.time + dt);
-    if (s.action.duration - s.action.time <= EPSILON) { s.action.time = s.action.duration; finishAction(s); }}}
+    if (s.action.duration - s.action.time <= EPSILON) { s.action.time = s.action.duration; finishAction(s); }}
   } else move(s, input?.x, input?.z, dt);
   for (const h of s.hazards) {
     if (h.collisionPending && !rectBlocked(s.player.x, s.player.z, -.38, .38, h.z - .34, h.z + .34)) h.collisionPending = false;
@@ -443,19 +461,4 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
 export function ackRecovery(s){
  if(s.status!=='playing'||!s.recovery?.ready)return false;
  const decision=s.recovery.decision;s.recovery=null;s.dialog=decision;s.player.walking=false;if(s.pendingAisleLesson){s.pendingAisleLesson=false;showLesson(s,'aisle');}return true;
-}
-
-function escortGoal(s,h){
- const task=s.tasks.find(t=>t.id===h.taskId),side=task?.side==='right'?1:-1,approach=s.player.z<h.z?-1:s.player.z>h.z?1:h.z>8?-1:1;
- for(const d of [.72,.97,1.22,1.47,1.67])for(const x of [side*.43,side*.30,-side*.43,side*.55,-side*.55]){
-  const z=h.z+approach*d;if(Math.hypot(x-s.player.x,z-s.player.z)<.6||!canStand(s,x,z))continue;
-  let clear=true;for(let n=1;n<=32;n++){const q=n/32;if(!canStand(s,s.player.x+(x-s.player.x)*q,s.player.z+(z-s.player.z)*q)){clear=false;break;}}
-  if(clear)return {x,z};
- }
- // Very constrained geometry uses a short return-to-seat cue, never a trapped goal.
- return null;
-}
-export function cancelEscort(s){
- if(!['playing','paused'].includes(s.status)||!s.action?.escort)return false;
- const taskId=s.action.taskId;s.action=null;s.player.walking=false;emit(s,'escort-cancel',taskId);feedback(s,'暫停引導，旅客仍在原處。靠近後可重新招呼。');return true;
 }

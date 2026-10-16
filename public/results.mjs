@@ -28,11 +28,11 @@ export function trainingFeedback(s) {
   const correction=j=>{
     const first=j.firstChoice;
     const start=first?.good===false?'第一次就選錯，累計選錯':first?.good===true?'第一次選對，後來曾選錯':'曾選錯';
-    const outcome=taskFor(j).done&&j.good?'，之後修正並完成':'，這項工作還沒完成';
+    const outcome=taskFor(j).deferred&&j.good?'，之後修正並記錄為起飛後協助':taskFor(j).done&&j.good?'，之後修正並完成':'，這項工作還沒完成';
     return `${mode(j)}「${j.title}」${start} ${j.incorrect} 次${outcome}。`;
   };
   const safety=judged('safety'),wrongSafety=judgments.find(j=>taskFor(j)&&(j.safetyIncorrect>0||taskFor(j).kind==='safety'&&j.incorrect>0));
-  const safetyAdvice={bag:'先確認行李是否擋道、哪個櫃子可用，再選擇放置方式。',belt:'先看安全帶是否扣好，以及旅客正看哪裡，再選擇提醒方式。',tray:'先確認餐桌是否收妥、桌上有沒有物品，再決定怎麼協助。',seat:'比較兩張登機證的排數、側別與日期，再作判斷。',water:'走道被行李擋住時，先安排等候或交接，再清理行李。',blanket:'走道被行李擋住時，先安排等候或交接，再清理行李。'};
+  const safetyAdvice={bag:'先確認行李是否擋道、哪個櫃子可用，再選擇放置方式。',belt:'先看安全帶是否扣好，以及旅客正看哪裡，再選擇提醒方式。',tray:'先確認餐桌是否收妥、桌上有沒有物品，再決定怎麼協助。',seat:'比較兩張登機證的排數、側別與日期，再作判斷。',water:s.phase==='final-cabin-check'?'最後安全檢查期間，記錄一般需求為起飛後協助，繼續安全確認。':'走道被行李擋住時，先安排等候或交接，再清理行李。',blanket:s.phase==='final-cabin-check'?'本章將普通保暖需求記錄延後；這是訓練設定，醫療與緊急需求另依程序處理。':'走道被行李擋住時，先安排等候或交接，再清理行李。'};
   const congestion=s.boarding?.congestionEvents||0;
   let safetyRow;
   if(wrongSafety||congestion){
@@ -48,8 +48,12 @@ export function trainingFeedback(s) {
   const late=service.find(t=>t.late),pending=service.find(t=>t.assigned&&!t.done);
   const handed=service.find(t=>t.done&&t.handoff),waited=service.find(t=>t.done&&t.acknowledged),served=service.find(t=>t.done);
   let serviceRow;
-  if(late)serviceRow=row('service','服務安排','improve',`「${late.title}」曾等候超時，${late.done?'後來已完成服務':'需求仍未完成'}。`,'後來補上服務，仍需要留意先前的等候。','忙不過來時先安排等候；本章允許交接時，也可請同事協助。');
+  if(late)serviceRow=row('service','服務安排','improve',`「${late.title}」曾等候超時，${late.deferred?'後來已記錄為起飛後協助':late.done?'後來已完成服務':'需求仍未完成'}。`,s.phase==='final-cabin-check'?'需求後來可以安排延後，但曾未及時回應。':'後來補上服務，仍需要留意先前的等候。','忙不過來時先安排等候；本章允許交接時，也可請同事協助。');
   else if(wrongService)serviceRow=row('service','服務安排','improve',correction(wrongService),'回應方式需要修正，旅客的需求才能妥善處理。','先看旅客需求與現場限制，再決定怎麼協助。');
+  else if(s.phase==='final-cabin-check'&&service.length){
+    const recorded=service.filter(t=>t.done&&t.deferred).length,remaining=service.length-recorded;
+    serviceRow=row('service','服務安排',remaining?'improve':'good',`已記錄 ${recorded}/${service.length} 項一般需求為起飛後協助。${remaining?`仍有 ${remaining} 項需求未記錄。`:''}`,remaining?'未記錄的需求尚未獲得妥善安排；完成安全回報不代表所有需求均已處理。':'合理延後後停止耐心計時；記錄與交接均不代表物品已送達。',remaining?'在不影響安全工作的前提下，記錄剩餘需求並告知起飛後協助。':'先完成最後安全確認；起飛後依實際程序追蹤已記錄的需求。');
+  }
   else if(pending)serviceRow=row('service','服務安排','improve',`已安排同事協助「${pending.title}」，結束時仍未送達。`,'安排交接不等於需求已完成。','留意同事進度，確認送達後再回報。');
   else if(handed)serviceRow=row('service','服務安排','good',`你安排同事協助「${handed.title}」，同事已送達。`,'有分工，也有實際完成服務。','繼續確認交接結果，再完成最後回報。');
   else if(waited)serviceRow=row('service','服務安排','good',`你先安排「${waited.title}」等候，後來已完成服務。`,'安排等候之後，也有把需求處理完。','維持追蹤，別把安排等候當成已完成服務。');
@@ -59,9 +63,10 @@ export function trainingFeedback(s) {
 
   const done=tasks.filter(t=>t.done).length,hazards=(s.hazards||[]).filter(h=>!h.done).length;
   const standing=(s.boarding?.actors||[]).filter(a=>!['seated','exited'].includes(a.status)).length;
-  const ready=tasks.length>0&&done===tasks.length&&!hazards&&!standing;
+  const finalCheck=s.phase==='final-cabin-check',required=finalCheck?tasks.filter(t=>t.kind==='safety'):tasks;
+  const ready=required.length>0&&required.every(t=>t.done)&&!hazards&&!standing;
   const reported=ready&&s.endReason==='complete';
-  const evidence=tasks.length?`工作完成 ${done}/${tasks.length} 項${s.boarding?`，還有 ${standing} 位旅客未到位`:''}，未清走道事件 ${hazards} 件；${reported?'已回前方回報':'尚未完成回報'}。`:'這次沒有可核對的任務紀錄。';
-  const completionRow=row('completion','收尾回報',!tasks.length?'unobserved':reported?'good':'improve',evidence,reported?'需求處理完，也完成最後回報。':ready?'工作都做完了，還差最後回報。':'完成所有需求、清空走道後，還要回前方回報。',reported?'下次繼續保留收尾檢查與回報的時間。':ready?'全部完成後，記得回前方按互動鍵回報。':'先完成剩餘需求，確認走道與旅客狀態，再回前方回報。');
+  const evidence=finalCheck?`安全確認 ${required.filter(t=>t.done).length}/${required.length} 項，需求記錄 ${service.filter(t=>t.deferred).length}/${service.length} 項，未清走道事件 ${hazards} 件；${reported?'客艙安全已回報':'尚未完成安全回報'}。`:tasks.length?`工作完成 ${done}/${tasks.length} 項${s.boarding?`，還有 ${standing} 位旅客未到位`:''}，未清走道事件 ${hazards} 件；${reported?'已回前方回報':'尚未完成回報'}。`:'這次沒有可核對的任務紀錄。';
+  const completionRow=row('completion','收尾回報',!tasks.length?'unobserved':reported?'good':'improve',evidence,reported?(finalCheck?'安全條件已確認並完成回報；普通需求可留待起飛後協助。':'需求處理完，也完成最後回報。'):ready?(finalCheck?'安全條件已確認，還差最後回報。':'工作都做完了，還差最後回報。'):finalCheck?'完成安全確認、清空走道後，回報客艙安全。':'完成所有需求、清空走道後，還要回前方回報。',reported?'下次繼續保留收尾檢查與回報的時間。':ready?'全部完成後，記得回前方按互動鍵回報。':finalCheck?'先確認安全與走道狀態，再回報；普通需求可記錄為起飛後協助。':'先完成剩餘需求，確認走道與旅客狀態，再回前方回報。');
   return [safetyRow,serviceRow,completionRow];
 }

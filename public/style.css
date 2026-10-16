@@ -71,7 +71,6 @@ small { display: block; font-size: 11px; color: #abc1bd; line-height: 1.7; }
 .secondary { background: #eff8e70c; border: 1px solid #afcebd55; color: #d2e7da; }
 .start-card>button { width: 100%; margin-bottom: 8px; }
 .start-card small { margin-top: 5px; }
-.start-card .disclaimer { margin-top: 12px; padding-top: 10px; border-top: 1px solid #b8d7bf33; font-size: 10px; color: #b6cac1; }
 .webgl-error { background: #143045; }
 .webgl-error strong { font-size: 21px; }
 .webgl-error p { font-size: 13px; line-height: 1.8; }
@@ -142,7 +141,7 @@ aside { position: absolute; z-index: 14; top: calc(var(--safe-top) + 50px); righ
 .task-row.near { background: #c4e1c20a; }
 .task-row.done { opacity: .5; }
 .task-row span { grid-column: 2; grid-row: 1/3; align-self: center; font-size: 11px; color: #a7c4bb; }
-#resultDetails { font-size: 12px; line-height: 1.9; margin: 10px 0 16px; white-space: pre-line; color: #c3d8c7; }
+#resultDetails { font-size:12px; line-height:1.8; margin:8px 0; color:#c3d8c7; overflow-wrap:anywhere; }
 footer { display: none; }
 /* Reading surfaces replace the checklist, but never replace the cabin canvas. */
 body[data-panel=decision] aside, body[data-panel=lesson] aside, body[data-panel=pause] aside, body[data-panel=result] aside { pointer-events: auto; }
@@ -256,7 +255,6 @@ body[data-panel=error] aside, body[data-panel=error] .control-dock, body[data-pa
   .start-card h1 { margin: 7px 0; font-size: 21px; }
   .start-card p { margin: 6px 0 8px; font-size: 12px; }
   .start-card small { font-size: 10px; line-height: 1.45; }
-  .start-card .disclaimer { margin-top: 8px; padding-top: 6px; }
   .start-card>button { min-height: 38px; padding: 8px; margin-bottom: 6px; }
   .scene-overlay { padding-top: calc(var(--safe-top) + 46px); padding-bottom: var(--safe-bottom); }
   .guidance { padding: 7px 10px; }
@@ -281,7 +279,6 @@ nav>button { min-height:44px; min-width:44px; }
 .target-label.detail { padding:4px 8px; }
 .handoff-hint { padding:8px 10px; border-left:3px solid #618f74; background:#e2e8d7; border-radius:4px; }
 .result-stars { font-size:25px; letter-spacing:3px; color:var(--gold); }
-.result-advice { border-left:2px solid var(--mint); padding-left:10px; }
 .best-record { font-size:11px!important; color:var(--gold)!important; }
 body[data-panel=decision][data-decision-kind=safety] aside { top:auto; left:50%; right:auto; bottom:var(--safe-bottom); width:min(620px, calc(100% - var(--safe-left) - var(--safe-right))); max-height:42dvh; transform:translateX(-50%); overflow:auto; }
 body[data-panel=decision][data-decision-kind=safety] .guidance,
@@ -431,7 +428,7 @@ body[data-panel=decision][data-decision-kind=safety] .scene-badge { display:none
 .chapter-option img { grid-column:1; width:16px; height:16px; }
 .chapter-option>span { grid-column:2; font-size:12px; }
 .chapter-option>small { grid-column:2; font-size:10px; margin:0; }
-#campaignStatus, #chapterMenuHint { font-size:10px; margin-top:5px; }
+#chapterMenuHint { font-size:10px; margin-top:5px; }
 #briefDescription, #briefTiming { white-space:pre-line; }
 /* Space, conversational replies and an analog thumbstick share the cabin palette. */
 .sr-only { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; overflow:hidden!important; clip-path:inset(50%)!important; }
@@ -637,13 +634,6 @@ button.clue-map[data-revealed=false]:after { content:'▦\a查看座位圖'; }
 .knowledge-copy a { display:block; color:var(--mint); padding:8px 0; text-underline-offset:3px; overflow-wrap:anywhere; font-size:12px; line-height:1.7; }
 .knowledge-copy p.source-note { font-size:12px; color:#c3d5cc; }
 .codex-book>p.codex-disclaimer { flex:none; font-size:12px; color:#c3d5cc; border-top:1px solid #a8dfcb33; padding-top:12px; margin-bottom:0; }
-.review-details { border-top:1px solid #a8dfcb55; border-bottom:1px solid #a8dfcb55; margin:14px 0 8px; }
-.review-details>summary { cursor:pointer; color:var(--mint); padding:12px 0; font-size:13px; min-height:44px; }
-.judgment { padding:12px 0; border-top:1px solid #a8dfcb33; }
-.judgment>summary { cursor:pointer; color:var(--gold); font-size:13px; min-height:44px; padding:10px 0; }
-.judgment h3 { font-size:14px; }
-.judgment .knowledge-copy { padding:0; }
-#judgmentList p { font-size:13px; line-height:1.75; }
 @media(max-width:600px) {
  .codex-overlay { padding:10px; }
  .codex-book { padding:16px; border-radius:12px; }
@@ -752,9 +742,6 @@ body[data-panel=result] aside, body[data-panel=result] .control-dock, body[data-
 .result-card .reward-card img { width:64px; height:55px; }
 .result-card .reward-card small { font-size:8px; margin-bottom:3px; }
 .result-card .reward-card b { font-size:12px; }
-.result-more { margin-top:12px; border-top:1px solid #b4d8cb33; text-align:left; }
-.result-more>summary { padding:13px 0; min-height:44px; cursor:pointer; color:#c6dcd1; font-size:13px; }
-.result-more .result-advice { margin-top:8px; }
 .training-feedback { margin:20px 0; text-align:left; border-top:1px solid #b4d8cb33; padding-top:16px; }
 .training-feedback h3 { font-size:16px; margin:0 0 6px; }
 .result-card .training-scope { font-size:12px; color:#bbd4cb; line-height:1.6; margin:0 0 12px; }
@@ -771,9 +758,12 @@ body[data-panel=result] aside, body[data-panel=result] .control-dock, body[data-
 .retry-practice { text-align:left; margin:20px 0; border-top:1px solid #b4d8cb33; padding-top:16px; }
 .retry-practice h3 { font-size:16px; margin:0 0 8px; }
 .retry-task-list { display:grid; gap:8px; }
-.retry-task { display:grid; gap:5px; width:100%; min-height:56px; text-align:left; white-space:normal; overflow-wrap:anywhere; padding:12px 14px; border-color:#a8dfcb66; }
-.retry-task strong { font-size:14px; color:var(--mint); }
-.retry-task small { font-size:12px; font-weight:400; color:#bbd4cb; }
+.retry-task { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px 12px; width:100%; min-height:56px; text-align:left; white-space:normal; overflow-wrap:anywhere; padding:12px 14px; border-color:#a8dfcb66; }
+.retry-task strong { grid-column:1; font-size:14px; color:var(--mint); }
+.retry-task small { grid-column:1; font-size:12px; font-weight:400; color:#bbd4cb; }
+.retry-task[data-complete=true] { border-color:#78dba5; background:#173c36; }
+.retry-complete { grid-column:2; grid-row:1 / span 2; align-self:center; display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#b7f3d0; white-space:nowrap; }
+.retry-complete-icon { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:#8ee3af; color:#123c27; font-size:17px; font-weight:700; line-height:1; }
 .retry-overlay { position:fixed; inset:0; z-index:90; display:grid; place-items:center; padding:var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); background:#091e2de8; backdrop-filter:blur(8px); }
 .retry-card { width:min(100%,600px); max-height:100%; overflow:auto; overscroll-behavior:contain; border:1px solid #a8dfcb77; border-radius:18px; padding:24px; background:#173541; overflow-wrap:anywhere; }
 .retry-heading { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:8px; }
