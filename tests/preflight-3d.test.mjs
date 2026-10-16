@@ -319,7 +319,7 @@ test('personal service with unresolved visible baggage is a retained safety erro
   // Seed 7 places water before the solid bag, making this mistake physically reachable.
   const s=fresh(7);assert.notEqual(task(s,'bag').variant,2);openTask(s,'water');
   assert.equal(task(s,'bag').done,false);const c=choices(s).find(c=>c.id==='serve');
-  assert.equal(c.good,false);assert.equal(c.safetyError,true);assert.match(s.dialog.description,/最後安全檢查/);
+  assert.equal(c.good,false);assert.equal(c.safetyError,true);assert.equal(s.dialog.description,'旅客提出飲水需求。');
   pick(s,c=>c.id==='serve');finishAction(s);assert.equal(s.safetyErrors,1);assert.equal(s.safety,80);
   assert.equal(task(s,'water').done,false);assert.equal(task(s,'bag').done,false);
 });

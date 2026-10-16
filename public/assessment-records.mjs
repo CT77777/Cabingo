@@ -6,7 +6,7 @@ function valid(r){
  if(!object(r)||!['boarding','preflight'].includes(r.chapterId)||!Number.isInteger(r.questionVersion)||r.questionVersion<1||r.questionVersion>9999)return false;
  if(!Number.isInteger(r.total)||r.total<1||r.total>64||!Number.isInteger(r.incorrect)||r.incorrect<0||r.incorrect>=r.total||r.safetyErrors!==0)return false;
  if(!Number.isFinite(r.elapsed)||r.elapsed<0||r.elapsed>(r.chapterId==='boarding'?90:100))return false;
- if(r.questionVersion===2&&r.total!==(r.chapterId==='boarding'?5:6))return false;
+ if((r.questionVersion===2||r.chapterId==='preflight'&&r.questionVersion===3)&&r.total!==(r.chapterId==='boarding'?5:6))return false;
  return r.stars===(r.incorrect===0?3:r.incorrect===1?2:1);
 }
 function clean(r){return {chapterId:r.chapterId,questionVersion:r.questionVersion,total:r.total,stars:r.stars,incorrect:r.incorrect,safetyErrors:0,elapsed:r.elapsed};}

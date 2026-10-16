@@ -25,7 +25,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     setPointerCapture(id){this.captures.push(id);}
   }
   for(const m of html.matchAll(/<([\w-]+)\b[^>]*\bid="([^"]+)"[^>]*>/g)){const e=ids[m[2]]=new Element(m[1],m[2]);e.hidden=/\bhidden(?:\s|>|=)/.test(m[0]);e.disabled=/\bdisabled(?:\s|>|=)/.test(m[0]);e.open=/\bopen(?:\s|>|=)/.test(m[0]);}
-  ids.decisionCard.append(ids.choices,ids.closeDecision);ids.lessonCard.append(ids.lessonContinue);ids.pauseCard.append(ids.resumeButton,ids.restartButton,ids.modeButton);ids.resultCard.append(ids.nextChapterButton,ids.replayButton,ids.resultMenuButton,ids.resultDetails,ids.bestRecord,ids.resultCodexButton);ids.resultOverlay.append(ids.resultCard);ids.briefCard.append(ids.startButton,ids.assessmentButton);
+  ids.answerFeedback.append(ids.answerMark,ids.answerStatus,ids.answerCopy,ids.answerContinue);ids.decisionCard.append(ids.choices,ids.closeDecision,ids.answerFeedback);ids.lessonCard.append(ids.lessonContinue);ids.pauseCard.append(ids.resumeButton,ids.restartButton,ids.modeButton);ids.resultCard.append(ids.nextChapterButton,ids.replayButton,ids.resultMenuButton,ids.resultDetails,ids.bestRecord,ids.resultCodexButton);ids.resultOverlay.append(ids.resultCard);ids.briefCard.append(ids.startButton,ids.assessmentButton);
   ids.codexOverlay.append(ids.closeCodex,ids.codexContent);
   const buttons=['up','left','down','right'].map(dir=>{const b=new Element('button');b.dataset.dir=dir;return b;});
   document={body:new Element('body'),hidden:false,activeElement:ids.sceneCanvas,getElementById:id=>{assert(ids[id],`unknown DOM ID ${id}`);return ids[id];},createElement:tag=>new Element(tag),querySelectorAll:selector=>{assert.equal(selector,'[data-dir]');return buttons;},addEventListener:(name,fn)=>(documentEvents[name]??=[]).push(fn)};
@@ -62,11 +62,18 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     h.ids.assessmentButton.click({detail:1});const s=h.state();
     assert(s.assessment&&!s.practice);assert(!s.lesson);assert(!s.boarding?.coach);
     for(const t of s.tasks){
-      s.player.x=0;s.player.z=t.z-.8;assert(logic.interact(s));h.api.refresh(true);
-      assert.equal(h.ids.decisionDescription.textContent,s.dialog.description);assert(!h.ids.decisionDescription.hidden);
+      while(!t.active)h.step();s.player.x=0;s.player.z=t.z-.8;assert(logic.interact(s));h.api.refresh(true);
+      if(s.chapterId==='preflight'&&t.kind==='service'){assert(h.ids.decisionDescription.hidden);assert.equal(h.ids.decisionDescription.textContent,'');}else{assert.equal(h.ids.decisionDescription.textContent,s.dialog.description);assert(!h.ids.decisionDescription.hidden);}
       const match=wrong[t.id],index=match?s.dialog.choices.findIndex(c=>c.id===match):s.dialog.choices.findIndex(c=>c.good);
-      assert(index>=0);h.tap(`Digit${index+1}`);assert(!s.dialog&&!s.action&&!s.recovery);
-      assert.equal(h.ids.feedback.textContent,'已記錄作答，結束後統一講評。');
+      assert(index>=0);h.tap(`Digit${index+1}`);
+      if(s.chapterId==='preflight'){
+        const good=s.judgments.at(-1).firstChoice.good;
+        if(good){assert(s.correctFeedback);assert(!s.dialog&&!s.answerFeedback);assert(!h.ids.correctFeedback.hidden);assert(h.ids.decisionCard.hidden);assert.equal(!!s.action,t.id!=='priority');}
+        else {assert(!h.ids.answerFeedback.hidden);assert.equal(h.ids.answerMark.textContent,'✕');assert(!h.ids.answerCopy.textContent.includes('正確選擇'));assert(h.ids.choices.hidden);}
+        const first=copy(s.judgments);h.tap(`Digit${index+1}`);assert.deepEqual(copy(s.judgments),first);
+        if(!good)h.ids.answerContinue.click({detail:1});let frames=0;while(s.action&&frames++<1000){if(s.action.interaction){const i=s.action.interaction,step=i.steps[i.index];logic.actionInput(s,'press');if(step.mode==='hold'){h.step(42);logic.actionInput(s,'release');}}else h.step();}assert(!s.action);
+      }else assert.equal(h.ids.feedback.textContent,'已記錄作答，結束後統一講評。');
+      assert(!s.dialog&&!s.action&&!s.recovery);
     }
     s.elapsed=elapsed;s.player.x=0;s.player.z=1.5;h.tap('Space');assert.equal(s.status,'finished');return s;
   }
@@ -77,19 +84,28 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     assert(h.ids.assessmentIntro.textContent.includes('起飛前巡艙 · 100 秒 · 6 題'));
     assert(h.ids.chapterList.children.filter(b=>!b.disabled).length===2);h.begin();assert(h.state().practice);assert.equal(h.ids.clock.textContent,'演練');
   });
-  test('Both chapter assessments defer all feedback, save stars once and replay the same chapter',()=>{
+  test('Both chapter assessments retain their feedback rules, save stars once and replay the same chapter',()=>{
     for(const chapterId of ['boarding','preflight']){
       const h=harness(logic,{chapterId,contextual:true}),s=finishAssessment(h);
-      const raw=h.storage[logic.ASSESSMENT_STORAGE_KEY],saved=JSON.parse(raw).records[`${chapterId}:2`];
+      const raw=h.storage[logic.ASSESSMENT_STORAGE_KEY],saved=JSON.parse(raw).records[`${chapterId}:${logic.assessmentVersion(chapterId)}`];
       assert.equal(saved.stars,3);assert.equal(saved.elapsed,35);assert.equal(saved.total,chapterId==='boarding'?5:6);
       assert(h.ids.resultStars.textContent.includes('3 / 3'));assert(h.ids.bestRecord.textContent.includes('已更新'));
       assert.equal(h.ids.trainingFeedbackList.children.length,s.tasks.length);assert.equal(h.ids.priorityCount.textContent,'1 / 1');
       for(const card of h.ids.trainingFeedbackList.children){assert.equal(card.children[0].children.length,1,'assessment retains the status badge');assert.equal(card.children.length,3);assert.deepEqual(card.children.slice(1).map(line=>line.children[0].textContent),['情境：','選擇做法：']);assert(card.children.slice(1).every(line=>line.children[1].textContent));}
-      assert(h.ids.scoreRow.hidden&&h.ids.handoffCount.hidden);assert.equal(h.storage['cabin3d-best-final-check-v1'],undefined);
+      assert(h.ids.scoreRow.hidden);assert.equal(h.ids.handoffCount.hidden,chapterId==='boarding');assert.equal(h.storage['cabin3d-best-final-check-v1'],undefined);
       h.api.refresh(true);assert.equal(h.storage[logic.ASSESSMENT_STORAGE_KEY],raw);
       h.ids.replayButton.click({detail:1});assert(h.state().assessment);assert.equal(h.state().chapterId,chapterId);assert.equal(h.state().judgments.length,0);
       h.tap('Escape');h.ids.modeButton.click({detail:1});assert(h.state().practice&&!h.state().assessment);assert.equal(h.state().chapterId,chapterId);
     }
+  });
+  test('Chapter 2 answer feedback survives pause, locks choices and uses deliberate acknowledgment',()=>{
+    const h=harness(logic,{chapterId:'preflight',contextual:true});h.ids.assessmentButton.click({detail:1});const s=h.state(),t=s.tasks.find(t=>t.id==='belt');
+    s.player.z=t.z-.8;logic.interact(s);h.api.refresh(true);h.choice(c=>!c.good);
+    assert(s.answerFeedback&&!s.answerFeedback.good);assert.equal(h.document.activeElement,h.ids.answerContinue);
+    const first=copy(s.judgments);h.ids.closeDecision.click({detail:1});assert(s.answerFeedback&&s.dialog);
+    h.tap('Escape');assert.equal(s.status,'paused');h.ids.resumeButton.click({detail:1});assert.equal(s.status,'playing');assert(s.answerFeedback);
+    h.key('Enter');h.key('Enter','Enter',{repeat:true});h.up('Enter');assert(!s.answerFeedback&&!s.dialog&&!s.action&&!t.done);assert.deepEqual(copy(s.judgments),first);
+    logic.interact(s);assert(!s.dialog,'answered wrong task cannot reopen');
   });
   test('Better assessment records replace only the matching chapter/version; worse and ties preserve the best',()=>{
     const storage={},h=harness(logic,{chapterId:'boarding',storage});finishAssessment(h,{wrong:{guide:'row'},elapsed:20});
@@ -112,7 +128,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     const saved={version:1,records:{'boarding:2':{chapterId:'boarding',questionVersion:2,total:5,stars:3,incorrect:0,safetyErrors:0,elapsed:30}}};
     const storage={'cabingo-assessment-best-v1':JSON.stringify(saved),'cabin3d-best-final-check-v1':'legacy','cabin3d-codex-v1':'{"version":1,"unlockedIds":["seat-belt"]}'},before=copy(storage);
     const h=harness(logic,{chapterId:'preflight',storage,contextual:true});h.begin();const s=h.state();s.status='finished';s.endReason='complete';s.grade='clean';h.api.refresh(true);
-    assert.equal(h.ids.resultStars.textContent,'不計星等');assert(h.ids.bestRecord.textContent.includes('不保存'));for(const key of Object.keys(before))assert.equal(storage[key],before[key]);
+    assert(h.ids.resultStars.hidden&&h.ids.bestRecord.hidden&&h.ids.trainingFeedback.hidden);for(const key of Object.keys(before))assert.equal(storage[key],before[key]);
   });
   test('Assessment timeout, hidden-page pause and instructions reveal no correctness hints',()=>{
     for(const chapterId of ['boarding','preflight']){
@@ -130,14 +146,17 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
       assert(h.ids.resultStars.textContent.includes('3 / 3'));assert.equal(h.storage[logic.ASSESSMENT_STORAGE_KEY],before);assert(/無法儲存/.test(h.ids.bestRecord.textContent));
     }
   });
-  test('Result feedback describes corrections and missing service records, and resets per run',()=>{
-    const h=harness(logic,{contextual:true});h.open(true);h.choice(c=>!c.good);h.ids.recoveryContinue.click({detail:1});h.choice(c=>c.good);h.step(180);
-    const s=h.state();assert(s.tasks.find(t=>t.id==='belt').done);s.status='finished';s.endReason='timeout';s.grade='incomplete';h.api.refresh(true);
-    const rows=h.ids.trainingFeedbackList.children;assert.equal(rows.length,3);assert.equal(rows[0].dataset.status,'improve');assert(rows[0].children[1].textContent.includes('第一次就選錯'));assert(rows[0].children[1].textContent.includes('修正並完成'));assert.equal(rows[1].dataset.status,'improve');assert(h.ids.trainingScope.textContent.includes('情境演練'));
-    assert(!h.ids.trainingFeedback.hidden);assert.equal(s.safetyErrors,0);h.api.refresh(true);assert.equal(h.ids.trainingFeedbackList.children[0],rows[0]);
-    h.ids.replayButton.click({detail:1});const next=h.state();next.status='finished';next.endReason='timeout';next.grade='incomplete';h.api.refresh(true);assert.equal(h.ids.trainingFeedbackList.children[0].dataset.status,'unobserved');assert(!h.ids.trainingFeedbackList.children[0].children[1].textContent.includes('修正並完成'));
+  test('Chapter 2 practice gives immediate corrections and only a completion notice',()=>{
+    const h=harness(logic,{contextual:true});h.open(true);h.choice(c=>!c.good);
+    assert(h.ids.recoveryCopy.textContent.includes('正確選擇：'));
+    h.ids.recoveryContinue.click({detail:1});h.choice(c=>c.good);h.step(180);
+    const s=h.state();assert(s.tasks.find(t=>t.id==='belt').done);assert.equal(s.safetyErrors,0);
+    s.status='finished';s.endReason='complete';h.api.refresh(true);
+    assert(h.ids.trainingFeedback.hidden&&h.ids.resultStars.hidden&&h.ids.bestRecord.hidden&&h.ids.resultDetails.hidden);
+    assert.equal(h.ids.trainingFeedbackList.children.length,0);assert.equal(h.ids.resultTitle.textContent,'情境演練完成。');
+    h.ids.resultMenuButton.click({detail:1});assert.equal(h.state().status,'briefing');
+    const exam=finishAssessment(h);assert(exam.assessment);assert(!h.ids.trainingFeedback.hidden&&!h.ids.resultStars.hidden);
   });
-
   test('Phone checklist follows the measured mission bottom when alerts wrap or resize',()=>{const h=harness(logic,{phone:true});h.begin(true);h.ids.missionHud.getBoundingClientRect=()=>({bottom:246,height:180});h.dispatch('resize');assert.equal(h.document.body.style['--mission-bottom'],'246px');h.ids.missionHud.getBoundingClientRect=()=>({bottom:315,height:249});h.dispatch('resize');assert.equal(h.document.body.style['--mission-bottom'],'315px');});
 
   test('Codex opens from briefing, traps keys, closes with Escape and restores focus without starting play',()=>{
@@ -173,14 +192,18 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     assert(h.ids.serviceDemo.hidden);assert.equal(h.document.activeElement,h.ids.lessonContinue);
   });
 
-  test('Demo keyboard repeats cannot skip steps and focus always lands on an enabled control',()=>{
-    for(const code of ['Enter','NumpadEnter']){
-      const h=harness(logic,{contextual:true});h.ids.startButton.click({detail:1});h.ids.demoWait.focus();h.key(code);h.ids.demoWait.click({detail:0});
-      assert.equal(h.document.activeElement,h.ids.demoSafety);const repeated=h.key(code,code,{repeat:true});assert(repeated.prevented>0);
-      h.ids.demoSafety.click({detail:0});assert.equal(h.ids.demoSafety.disabled,false,'held Enter must not activate next control');h.up(code);
-      h.key(code);h.ids.demoSafety.click({detail:0});h.up(code);assert.equal(h.document.activeElement,h.ids.demoHandoff);
-      h.key(code);h.ids.demoHandoff.click({detail:0});h.up(code);assert(h.ids.demoSafety.disabled,'completed safety step stays complete');assert.equal(h.document.activeElement,h.ids.lessonContinue);assert(!h.document.activeElement.disabled);
+  test('Chapter 2 starts directly and hides service policy before a choice in both modes',()=>{
+    for(const assessment of [false,true]){
+      const h=harness(logic,{contextual:true});h.ids[assessment?'assessmentButton':'startButton'].click({detail:1});const s=h.state();
+      assert(!s.lesson);assert(h.ids.lessonOverlay.hidden&&h.ids.serviceDemo.hidden);assert(!h.ids.gameSurface.inert);
+      for(const id of ['water','blanket']){while(!s.tasks.find(t=>t.id===id).active)h.step();const t=s.tasks.find(t=>t.id===id);s.player.z=t.z-.8;logic.interact(s);h.api.refresh(true);assert.equal(s.dialog.id,id);assert(h.ids.decisionDescription.hidden);assert.equal(h.ids.decisionDescription.textContent,'');logic.closeDialog(s);}
     }
+  });
+  test('Correct assessment choices execute immediately and their success notice expires automatically',()=>{
+    const h=harness(logic,{contextual:true});h.ids.assessmentButton.click({detail:1});const s=h.state(),t=s.tasks.find(t=>t.id==='water');s.player.z=t.z-.8;logic.interact(s);h.api.refresh(true);h.choice(c=>c.id==='wait');
+    assert(s.action&&!s.dialog&&!s.answerFeedback);assert(!h.ids.correctFeedback.hidden);assert(h.ids.decisionCard.hidden);const action=s.action.id;
+    h.tap('Escape');const progress=s.action.time;h.step(90);assert.equal(s.action.time,progress);assert(h.ids.correctFeedback.hidden);h.ids.resumeButton.click({detail:1});assert(!h.ids.correctFeedback.hidden);
+    h.step(80);assert(h.ids.correctFeedback.hidden);assert.equal(s.action.id,action);h.step(120);assert(t.done);assert.equal(s.completed,1);assert.equal(s.judgments[0].attempts,1);
   });
 
   test('Guided boarding requires deliberate observation and keeps a single live objective',()=>{
@@ -226,7 +249,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
 
   test('Starting or reselecting the current chapter never overwrites a newer or concurrent save',()=>{for(const raw of [JSON.stringify({version:3,marker:'future'}),JSON.stringify({...logic.createCampaign(),bestStars:{preflight:3}})]){const h=harness(logic);h.storage['cabin3d-campaign-v2']=raw;h.ids.chapterList.children.find(b=>b.dataset.chapter==='preflight').click({detail:1});assert.equal(h.state().chapterId,'preflight');assert.equal(h.storage['cabin3d-campaign-v2'],raw);h.begin();assert.equal(h.storage['cabin3d-campaign-v2'],raw);assert.equal(h.state().status,'playing');}});
 
-  test('Campaign storage denial and malformed data do not block practice or award progress',()=>{for(const options of [{storageReadError:true},{storageWriteError:true},{storage:{'cabin3d-campaign-v2':'bad'}}]){const h=harness(logic,options);h.begin(true);const s=h.state();s.status='finished';s.endReason='complete';s.grade='clean';h.api.refresh(true);const raw=h.storage['cabin3d-campaign-v2'];if(raw&&raw!=='bad')assert.deepEqual(JSON.parse(raw).bestStars,{});assert.equal(h.ids.resultStars.textContent,'不計星等');}});
+  test('Campaign storage denial and malformed data do not block practice or award progress',()=>{for(const options of [{storageReadError:true},{storageWriteError:true},{storage:{'cabin3d-campaign-v2':'bad'}}]){const h=harness(logic,options);h.begin(true);const s=h.state();s.status='finished';s.endReason='complete';s.grade='clean';h.api.refresh(true);const raw=h.storage['cabin3d-campaign-v2'];if(raw&&raw!=='bad')assert.deepEqual(JSON.parse(raw).bestStars,{});if(s.chapterId==='preflight')assert(h.ids.resultStars.hidden);else assert.equal(h.ids.resultStars.textContent,'不計星等');}});
 
   test('Manual pause uses the full-screen inert modal and keeps settings optional',()=>{const h=harness(logic);h.begin();h.tap('Escape');assert.equal(h.state().status,'paused');assert(!h.ids.awayOverlay.hidden);assert(h.ids.focusPauseCard.hidden);assert(!h.ids.pauseCard.hidden);assert(h.ids.gameSurface.inert);assert.equal(h.ids.awayOverlay.attrs['aria-labelledby'],'pauseTitle');const elapsed=h.state().elapsed;h.step(90);assert.equal(h.state().elapsed,elapsed);h.ids.pauseInfoButton.click({detail:1});assert(!h.ids.rulesPanel.hidden);h.ids.resumeButton.click({detail:1});assert.equal(h.state().status,'playing');assert(h.ids.awayOverlay.hidden);assert(!h.ids.gameSurface.inert);});
 
@@ -242,7 +265,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
 
   test('Volume preferences and explicit mute update controls safely',()=>{const h=harness(logic);h.ids.volumeSlider.value='0';h.ids.volumeSlider.dispatch('input');assert.equal(h.calls.audioPrefs.volume,0);assert.equal(h.calls.audioPrefs.muted,true);h.ids.muteButton.click({detail:1});assert.equal(h.calls.audioPrefs.muted,false);assert.equal(h.ids.muteButton.attrs['aria-pressed'],'false');});
 
-  test('New-round sound reset and practice result do not write formal best records',()=>{const h=harness(logic);h.begin(true);const previous=h.state().runId;h.ids.restartButton.click({detail:1});assert.notEqual(h.state().runId,previous);assert.equal(h.calls.audioResets,2);const s=h.state();s.status='finished';s.endReason='complete';s.grade='clean';h.api.refresh(true);assert.equal(h.storage['cabin3d-best-v1'],undefined);assert.equal(h.ids.resultStars.textContent,'不計星等');});
+  test('New-round sound reset and practice result do not write formal best records',()=>{const h=harness(logic);h.begin(true);const previous=h.state().runId;h.ids.restartButton.click({detail:1});assert.notEqual(h.state().runId,previous);assert.equal(h.calls.audioResets,2);const s=h.state();s.status='finished';s.endReason='complete';s.grade='clean';h.api.refresh(true);assert.equal(h.storage['cabin3d-best-v1'],undefined);assert(h.ids.resultStars.hidden);});
 
   test('A practice mistake emits exactly once per deliberate retry, never per held key',()=>{const h=harness(logic);h.open(true);const key=h.choice(c=>!c.good,{release:false});const n=h.calls.audioEvents.filter(e=>e.type==='mistake').length;assert.equal(n,1);h.key(key,'Process',{repeat:true});h.step(20);assert.equal(h.calls.audioEvents.filter(e=>e.type==='mistake').length,n);h.up(key);h.choice(c=>!c.good);assert.equal(h.calls.audioEvents.filter(e=>e.type==='mistake').length,n+1);});
 

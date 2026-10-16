@@ -1,9 +1,12 @@
+import {preflightDecision} from './preflight-decisions.mjs?v=ch2-actions-2';
 // Fictional scenario decisions, pending instructor review. These are not SOPs.
 export const ASSESSMENT_VERSION=2;
+export const assessmentVersion=chapterId=>chapterId==='preflight'?3:ASSESSMENT_VERSION;
 export const ASSESSMENT_SCOPE='每題只能作答一次，結束後統一講評。不執行處置或模擬服務等待；全部作答後回前方提交答案。這是待專業審閱的情境判斷測驗，不代表公司正式考核。';
-export const assessmentScope=state=>`${state.duration} 秒 · ${state.tasks.length} 題。${ASSESSMENT_SCOPE}`;
+export const assessmentScope=state=>`${state.duration} 秒 · ${state.tasks.length} 題。${state.chapterId==='preflight'?'每題只能作答一次。答對後執行處置；答錯顯示紅叉與旅客回覆，正確做法留到結算講評。完成作答及處置後回前方提交；行李未收妥時可繞行。':ASSESSMENT_SCOPE}`;
 
-export function assessmentDecision(task,chapterId='preflight') {
+export function assessmentDecision(task,chapterId='preflight',state={}) {
+  if(chapterId==='preflight'&&task.id!=='priority')return preflightDecision(task,state);
   const v=task.variant;
   const choice=(id,label,good,feedback)=>({id,label,good,feedback,tags:[]});
   let description,choices;
@@ -80,18 +83,18 @@ export function assessmentSummary(state) {
   const safetyErrors=judgments.filter(j=>j.firstChoice?.good===false&&(tasks.find(t=>t.id===j.taskId)?.kind==='safety'||j.safetyIncorrect>0)).length;
   const stars=!submitted||safetyErrors?0:incorrect===0?3:incorrect===1?2:1;
   const title=!submitted?'模擬結束，作答尚未完整提交。':safetyErrors?'安全判斷需要再練習。':incorrect?'安全相關題答對，其他判斷再練習。':'本次情境首次作答全對。';
-  const record=state.assessment&&submitted&&stars>0?{chapterId:state.chapterId,questionVersion:ASSESSMENT_VERSION,total:tasks.length,stars,incorrect,safetyErrors,elapsed:state.elapsed}:null;
+  const record=state.assessment&&submitted&&stars>0?{chapterId:state.chapterId,questionVersion:assessmentVersion(state.chapterId),total:tasks.length,stars,incorrect,safetyErrors,elapsed:state.elapsed}:null;
   return {safety,service,priority,submitted,incorrect,safetyErrors,stars,title,record};
 }
 
 export function assessmentFeedback(state) {
   return (state.tasks||[]).map(t=>{
-    const decision=assessmentDecision(t,state.chapterId),correct=decision.choices.filter(c=>c.good);
+    const decision=assessmentDecision(t,state.chapterId,state),correct=decision.choices.filter(c=>c.good);
     const judgment=state.judgments.find(j=>j.taskId===t.id),first=judgment?.firstChoice;
     return {id:t.id,title:decision.title,status:!first?'unobserved':first.good?'good':'improve',
       context:judgment?.context||decision.description,
       firstChoice:first?.label||'尚未作答',
-      correctAction:correct.map(c=>c.label).join('；或'),
-      reason:correct[0].feedback};
+      correctAction:judgment?.correctAction||correct.map(c=>c.label).join('；或'),
+      reason:judgment?.reason||correct[0].feedback};
   });
 }

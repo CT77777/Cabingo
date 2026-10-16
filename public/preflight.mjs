@@ -1,6 +1,7 @@
 import {initBoarding,tickBoarding,boardingChoices,boardingPassable,boardingTaskComplete,boardingReady,boardingTaskActor} from './boarding.mjs?v=training-modes-2';
 import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=recording-time-1';
-import {assessmentDecision} from './assessment.mjs?v=feedback-context-2';
+import {preflightDecision} from './preflight-decisions.mjs?v=ch2-actions-2';
+import {assessmentDecision} from './assessment.mjs?v=ch2-actions-2';
 
 // Pure, deterministic preflight game state. This is a fictional game,
 // not aviation training or a representation of real operating procedures.
@@ -75,7 +76,7 @@ export function createState(options = {}) {
     return {
       ...d, characterId:d.characterId||(d.id==='belt'?'elder':null), row, side, seat: `${row + 1}${side === 'left' ? 'B' : 'C'}`,
       variant: d.variant ?? Math.floor(random() * 3), x: 0, z: WORLD.rows[row],
-      spawn: d.spawn ?? 0, active: !!assessment || d.kind === 'safety' || d.spawn === 0,
+      spawn: d.spawn ?? 0, active: (!!assessment&&chapterId==='boarding') || d.kind === 'safety' || d.spawn === 0,
       done: false, assigned: false, late: false, acknowledged: false,
       handoff: false, deferred: false, warned: false, mistakes: 0
     };
@@ -89,7 +90,7 @@ export function createState(options = {}) {
     player: { x: 0, z: 1.5, angle: 0, walking: false, step: 0 },
     tasks, encounters:[], judgments:[], hazards: [], hazardsCleared: 0, handoffTokens: chapter.handoffTokens, handoffJob: null,
     safety: 100, comfort: 80, safetyErrors: 0, mistakes: 0, servicePenalty: 0,
-    dialog: null, action: null, lesson: null, lessonSeen: [], decisionSerial: 0,
+    dialog: null, answerFeedback: null, correctFeedback: null, action: null, lesson: null, lessonSeen: [], decisionSerial: 0,
     feedback: 'WASD / 方向鍵走動，靠近標記按空白鍵。先觀察，再選擇處理。',
     feedbackKind: 'normal', near: null, completed: 0, grade: null, result: null,
     endReason: null, reportAttempted: false
@@ -112,7 +113,7 @@ export function start(s) {
   s.status = 'playing';
   for(const t of s.tasks)if(t.active&&t.kind==='service')emit(s,'demand',t.id);
   updateNear(s);
-  if(s.contextual&&!s.boarding)showLesson(s,'serviceIntro');
+  if(s.contextual&&!s.boarding&&s.phase!=='final-cabin-check')showLesson(s,'serviceIntro');
   if(s.boarding?.coach)showLesson(s,'boardingWelcome');
   return true;
 }
@@ -126,7 +127,8 @@ export function counts(s) {
   };
 }
 export function chapterReady(s) {
-  if(s.assessment)return s.tasks.every(t=>t.assessmentAnswered);
+  if(s.assessment)return !s.action&&!s.answerFeedback&&s.tasks.every(t=>t.assessmentAnswered);
+  if(s.practice&&s.chapterId==='preflight')return s.tasks.every(t=>t.done)&&s.hazards.every(h=>h.done);
   if(s.boarding)return boardingReady(s);
   const c = counts(s);
   return s.tasks.filter(t=>s.phase!=='final-cabin-check'||t.kind==='safety').every(t=>t.done) && c.hazards === 0;
@@ -202,64 +204,17 @@ export function move(s, dx, dz, dt) {
 }
 
 function choicesFor(s, t) {
-  if(s.assessment){const d=assessmentDecision(t,s.chapterId);return {...d,choices:shuffle(d.choices,rng(s.seed+s.decisionSerial++*97))};}
-  if(s.boarding&&t.id!=='bag'){const d=boardingChoices(s,t);t.quote=d.quote;t.description=d.description;return {id:t.id,title:t.title,...d,choices:shuffle(d.choices,rng(s.seed+s.decisionSerial++*97))};}
-  const v = t.variant;
-  const mk = (id, label, good, duration = 5, extra = {}) => ({ id, label, good, duration, tags: [`${duration}秒`], ...extra });
-  const repaired = '確認完成，繼續巡艙。';
-  let quote, description, choices;
-  if (t.id === 'bag') {
-    quote = ['我的包可以放哪裡？', '這個包還沒放好。', '我已經放好了。'][v];
-    description = ['走道有行李，頭頂櫃還有空位。', '走道有行李；旅客上方已滿，另一側有可用空櫃。', '行李已收妥，走道保持淨空。'][v];
-    choices = [mk('stow', '幫你放進可用空櫃', v !== 2, 5), mk('relocate', v===1?'擠進旅客上方已滿的櫃子':'先把行李留在走道', false, 6), mk('check', '查看已收好的行李', v === 2, 4)];
-    choices.forEach(c => { c.feedback = c.good ? repaired : ['走道有行李，頭頂櫃有空位；現在需要協助收妥。', '旅客上方已滿，但另一側有空櫃；請使用畫面中的可用空櫃。', '行李已收妥、走道淨空；現在只需查看確認。'][v]; });
-  } else if (t.id === 'belt') {
-    quote = ['嗯？你剛剛說什麼？', '這個圖示是什麼意思？', '這樣可以了嗎？'][v];
-    description = ['旅客盯著手機，安全帶尚未扣好。', '旅客指著圖示，安全帶尚未扣好。', '旅客已扣好安全帶，等你查看。'][v];
-    if(s.characterMemory?.elder?.helped)quote=`又見面了，謝謝你登機時幫我。${quote}`;
-    choices = [mk('attention', '先請旅客抬頭，再示範扣法', v === 0), mk('diagram', '先指圖示，讓旅客照著操作', v === 1, 6), mk('check', '查看扣好的安全帶', v === 2, 4)];
-    choices.forEach(c => { c.feedback = c.good ? repaired : ['旅客正看手機、還沒扣好；需要先引起注意。', '旅客指著圖示、還沒扣好；需要說明圖示。', '安全帶已扣好；現在只需查看確認。'][v]; });
-  } else if (t.id === 'tray') {
-    quote = ['現在可以收桌子嗎？', '我還拿著咖啡呢。', '桌子收好了。'][v];
-    description = ['餐桌展開，桌面已清空。', '餐桌展開，桌上有物品，旅客手拿咖啡。', '餐桌已收妥，旅客等你查看。'][v];
-    choices = [mk('fold', '請把空餐桌收起', v === 0), mk('assist', '幫忙安置咖啡和物品', v === 1, 6), mk('check', '查看收妥的餐桌', v === 2, 4)];
-    choices.forEach(c => { c.feedback = c.good ? repaired : ['餐桌展開但已清空；現在可以請旅客收起。', '桌上有物品，旅客拿著咖啡；需要協助安置物品。', '餐桌已收妥；現在只需查看確認。'][v]; });
-  } else if (t.id === 'question') {
-    const known = v !== 0;
-    quote = '大概何時出發？'; description = `資訊板：${known ? '預估稍後，時間可能調整。' : '目前沒有確認的預估。'}`;
-    choices = [mk('estimate', '預估稍後，可能調整', known, 4), mk('unknown', '還沒確定，有消息告訴您', !known, 4), mk('ask', '向同事確認最新消息', true, 9)];
-    choices.forEach(c => { c.feedback = c.good ? '旅客收到與資訊板一致的回覆。' : known ? '資訊板已有預估、仍可能調整；這句回覆漏掉了已知資訊。' : '資訊板還沒有確認的預估；現在不能提供出發時間。'; });
-  } else if(s.phase==='final-cabin-check'&&t.kind==='service') {
-    const available=s.handoffTokens>0&&!s.handoffJob;
-    const blocked=s.hazards.some(h=>!h.done)||s.tasks.some(t=>t.id==='bag'&&!t.done&&t.variant!==2);
-    quote=t.id==='water'?'可以給我一杯水嗎？':'可以給我一條毯子嗎？';
-    description=`目前是起飛前最後安全檢查，這是一般${t.id==='water'?'飲水':'保暖'}需求，沒有醫療或緊急情況。${blocked?'走道仍有阻礙，須先排除。':'仍須確認客艙安全後回報。'}本章將普通服務記錄為起飛後處理；這是情境訓練設定，不代表法規一律禁止遞毛毯。`;
-    const feedback='需求已記錄，起飛後再協助；旅客留在座位，不再計算等候耐心。記錄需求不等於物品已送達。';
-    choices=[
-      mk('wait','記錄需求，起飛後再協助',true,3,{ack:true,defer:true,feedback}),
-      mk('serve',t.id==='water'?'先送水，再繼續安全檢查':'先拿毯子，再繼續安全檢查',false,3,{safetyError:true,feedback:'本章正在起飛前最後安全檢查；普通需求先記錄延後，不應中斷安全確認。這是本章情境規則，醫療或緊急需求另依程序處理。'})
-    ];
-    if(available)choices.push(mk('handoff','請同事記錄，起飛後再協助',true,1,{handoff:true,defer:true,feedback:'同事已接下需求紀錄，起飛後再協助；現在不會取物或送達，安全檢查仍須完成。'}));
-  } else {
-    const urgent = s.tasks.find(x => x.id === 'bag' && !x.done && x.variant !== 2);
-    const available = s.handoffTokens > 0 && !s.handoffJob;
-    quote = t.id === 'water' ? '可以給我一杯水嗎？' : '可以給我一條毯子嗎？';
-    description = `${urgent ? `附近的行李仍擋在走道。` : '走道行李已清除。'}${t.acknowledged ? '旅客已接受過一次等候安排。' : '旅客正在座位等候。'}`;
-    choices = [
-      mk('serve', t.id === 'water' ? '我來送水' : '我來拿毯子', !urgent, 8, { safetyError: !!urgent, feedback: urgent ? '走道仍被行李占用，現在應先處理行李；可回應等候或交接。' : '旅客需求已完成。' }),
-      mk('handoff', t.id === 'water' ? '請同事送水' : '請同事拿毯子', available, 3, { handoff: true, tags: ['3秒', '你可以繼續巡艙'], feedback: available ? '已交接，待同事送達。回饋較少，名額用完不會恢復。' : '交接名額已用完，請親自協助或安排等候。' }),
-      mk('wait', s.hazards.some(h=>!h.done)||urgent?'我先清理走道，再來協助您':s.tasks.some(t=>t.kind==='safety'&&!t.done)?'我先完成安全檢查，再回來':'我會回來送上，請稍等', !t.acknowledged, 3, { ack: true, tags: ['3秒', '旅客留在座位等候'], feedback: !t.acknowledged ? '旅客願意再等一下，需求還沒完成。' : '已延長過等候，重複說明不會完成需求。' })
-    ];
-    choices=choices.filter(c=>!c.handoff||available).filter(c=>!c.ack||!t.acknowledged);
-    if(urgent&&t.acknowledged)choices.push(mk('leave','先清理走道行李，馬上回來',true,0,{leave:true,tags:[]}));
-  }
-  if(s.handsOn&&!s.contextual)for(const c of choices){
+  let d;
+  if(s.assessment&&(s.boarding||t.id==='priority')){d=assessmentDecision(t,s.chapterId);if(s.boarding)return {...d,choices:shuffle(d.choices,rng(s.seed+s.decisionSerial++*97))};}
+  else if(s.boarding&&t.id!=='bag')d={id:t.id,title:t.title,...boardingChoices(s,t)};
+  else d=preflightDecision(t,s);
+  if(s.handsOn&&!s.contextual)for(const c of d.choices){
     const steps=actionSteps({kind:c.handoff?'handoff':c.ack?'wait':'task',taskId:t.id,choice:c});
     c.tags=[`${steps.length} 步操作`,...c.tags.filter(tag=>!/^\d+秒$/.test(tag))];
   }
-  if(s.contextual)for(const c of choices)c.tags=c.tags.filter(tag=>!/^\d+秒$/.test(tag));
-  t.quote = quote; t.description = description;
-  return { handoffHint: null, id: t.id, title: t.title, quote, description, choices: shuffle(choices, rng(s.seed + s.decisionSerial++ * 97)) };
+  if(s.contextual)for(const c of d.choices)c.tags=c.tags.filter(tag=>!/^\d+秒$/.test(tag));
+  t.quote=d.quote;t.description=d.description;
+  return {...d,choices:shuffle(d.choices,rng(s.seed+s.decisionSerial++*97))};
 }
 
 export function interact(s) {
@@ -275,17 +230,18 @@ export function interact(s) {
     if (!chapterReady(s)) {
       const c = counts(s); s.reportAttempted = true;
       if(s.assessment){feedback(s,`還有 ${s.tasks.filter(t=>!t.assessmentAnswered).length} 題未作答，全部作答後再提交。`);return false;}
-      feedback(s, s.boarding?`尚有 ${s.boarding.actors.filter(a=>!['seated','exited'].includes(a.status)).length} 位旅客未到位；完成所有需求、讓走道淨空後再回報。`:s.phase==='final-cabin-check'?`尚需確認 ${s.tasks.filter(t=>t.kind==='safety').length-c.safety} 項安全檢查、清除 ${c.hazards} 件走道事件；普通服務不必送達才能回報。`:`尚需檢查 ${s.tasks.filter(t=>t.kind==='safety').length - c.safety} 項、需求 ${s.tasks.filter(t=>t.kind==='service').length - c.service} 個、走道 ${c.hazards} 件；完成後再回報。`, 'warning'); return false;
+      feedback(s, s.boarding?`尚有 ${s.boarding.actors.filter(a=>!['seated','exited'].includes(a.status)).length} 位旅客未到位；完成所有需求、讓走道淨空後再回報。`:s.phase==='final-cabin-check'?(s.practice?`尚需完成 ${s.tasks.filter(t=>!t.done).length} 項任務、清除 ${c.hazards} 件走道事件；一般需求須記錄為起飛後協助。`:`尚需確認 ${s.tasks.filter(t=>t.kind==='safety').length-c.safety} 項安全檢查、清除 ${c.hazards} 件走道事件；普通服務不必送達才能回報。`):`尚需檢查 ${s.tasks.filter(t=>t.kind==='safety').length - c.safety} 項、需求 ${s.tasks.filter(t=>t.kind==='service').length - c.service} 個、走道 ${c.hazards} 件；完成後再回報。`, 'warning'); return false;
     }
     finish(s, 'complete'); return true;
   }
   const task = s.tasks.find(t => t.id === s.near && t.active && !t.done && !t.assessmentAnswered && !t.assigned);
   if (!task) { feedback(s, '靠近座位旁的標記，按空白鍵 查看情境。'); return false; }
   if(!s.encounters.includes(task.id))s.encounters.push(task.id);
+  s.correctFeedback=null;
   s.dialog = choicesFor(s, task); s.player.walking = false; return true;
 }
 export function closeDialog(s) {
-  if (!s.dialog) return false;
+  if (!s.dialog || s.answerFeedback) return false;
   s.dialog = null; s.player.walking = false;
   feedback(s, '可以再觀察眼前情境，靠近後按空白鍵。');
   return true;
@@ -302,6 +258,25 @@ export function choose(s, index) {
   if(!judgment.attempts)judgment.firstChoice={label:choice.label,good:choice.good,mode:judgment.mode};
   if(!choice.good&&(t.kind==='safety'||choice.safetyError))judgment.safetyIncorrect=(judgment.safetyIncorrect||0)+1;
   judgment.attempts++;if(!choice.good)judgment.incorrect++;judgment.choiceId=choice.id;judgment.choiceLabel=choice.label;judgment.good=choice.good;judgment.feedback=choice.feedback;
+  if(s.assessment&&s.chapterId==='preflight'){
+    const correct=s.dialog.choices.filter(c=>c.good);
+    judgment.correctAction=correct.map(c=>c.label).join('；或');
+    judgment.reason=choice.feedback;
+    t.assessmentAnswered=true;
+    emit(s,'choice',t.id,{choiceId:choice.id});
+    emit(s,choice.good?'correct':'mistake',t.id,{choiceId:choice.id});
+    if(choice.good){
+      s.dialog=null;s.player.walking=false;
+      s.correctFeedback={taskId:t.id,title:t.title,label:choice.label,remaining:1.2};
+      if(t.id!=='priority')beginAction(s,{kind:choice.handoff?'handoff':choice.ack?'wait':'task',taskId:t.id,time:0,duration:choice.duration,choice});
+      feedback(s,t.id==='priority'?'優先序判斷正確，已記錄。':`回答正確，正在執行：${choice.label}。`,'good');
+      updateNear(s);
+    }else{
+      s.answerFeedback={taskId:t.id,good:false,choice,reply:assessmentRetort(t)};
+      feedback(s,'回答錯誤，正確做法將於結算講評。','warning');
+    }
+    return true;
+  }
   if(s.assessment){
     // Do not run success/failure actions or emit correctness reactions. A
     // recorded decision is deliberately separate from a completed safety task.
@@ -313,7 +288,7 @@ export function choose(s, index) {
   const decision = s.dialog;
   s.dialog = null; s.player.walking = false;
   if (!choice.good && s.contextual) {
-    s.recovery={taskId:t.id,copy:choice.feedback,ready:s.practice||!!(s.boarding&&!s.boarding.formal),decision};
+    s.recovery={taskId:t.id,copy:s.practice&&s.chapterId==='preflight'?`${choice.feedback} 正確選擇：${decision.choices.filter(c=>c.good).map(c=>c.label).join('；或')}。`:choice.feedback,ready:s.practice||!!(s.boarding&&!s.boarding.formal),decision};
     if(!s.practice&&!(s.boarding&&!s.boarding.formal)){t.mistakes++;s.mistakes++;if(t.kind==='safety'||choice.safetyError){s.safetyErrors++;s.safety=clamp(s.safety-20,0,100);}else penalizeService(s,9);beginAction(s,{kind:'correction',taskId:t.id,time:0,duration:2,choice});}
     feedback(s,choice.feedback,'warning');return true;
   }
@@ -336,9 +311,26 @@ export function choose(s, index) {
   } else {
     if(!choice.ack&&!choice.handoff)emit(s,'correct',t.id);
     beginAction(s, { kind: choice.handoff ? 'handoff' : choice.ack ? 'wait' : 'task', taskId: t.id, time: 0, duration: choice.duration, choice });
-    feedback(s, t.kind === 'safety' ? '依眼前情境完成確認…' : choice.defer ? (choice.handoff?'正在向同事交接起飛後需求紀錄…':'正在記錄需求並說明起飛後協助…') : choice.handoff ? '聯繫同事交接，完成後仍需等候送達…' : choice.ack ? '正在說明等候安排…' : '正在協助旅客…');
+    feedback(s, s.practice&&s.chapterId==='preflight'?`正確選擇：${choice.label}。正在執行…`:t.kind === 'safety' ? '依眼前情境完成確認…' : choice.defer ? (choice.handoff?'正在向同事交接起飛後需求紀錄…':'正在記錄需求並說明起飛後協助…') : choice.handoff ? '聯繫同事交接，完成後仍需等候送達…' : choice.ack ? '正在說明等候安排…' : '正在協助旅客…');
   }
   return true;
+}
+function assessmentRetort(t){
+  const replies={
+    bag:['我的行李不是走道盆栽，不能一直種在這裡吧！','櫃子都滿了，難道我的行李會縮骨功？','都收好了，還要讓我的行李再搭一次電梯嗎？'],
+    belt:['我的手機沒有安全帶，你一直跟它說也沒用啦！','我都快把圖示看成抽象畫了，還是不會扣啊！','我問的是扣好了沒，不是請你猜謎耶！'],
+    tray:['空桌子也要占一個乘客名額嗎？','我的咖啡還在桌上，你是要幫它辦登機嗎？！','我的桌子是收好了，確認一下很難嗎！'],
+    water:'我只是口渴，不是要讓整趟安全檢查為我中場休息啦！',
+    blanket:'我想保暖，可沒要求安全檢查跟著放寒假啊！',
+    priority:'這是走道，不是跨欄比賽！我的膝蓋可沒報名！'
+  };
+  const reply=replies[t.id];return Array.isArray(reply)?reply[t.variant]:reply;
+}
+export function dismissAnswerFeedback(s){
+  if(s.status!=='playing'||!s.answerFeedback)return false;
+  s.answerFeedback=null;s.dialog=null;
+  feedback(s,'已保留首次錯答，可繼續其他題目；結算時統一講評。','warning');
+  updateNear(s);return true;
 }
 // Press/release controls complete work; elapsed time alone never advances a step.
 function updateActionProgress(a){const i=a.interaction;a.time=a.duration*(i.index+Math.min(.45,i.fill/.65*.45))/i.steps.length;}
@@ -418,7 +410,7 @@ function demandTick(s) {
     if (t.kind !== 'service') continue;
     if (!t.active && s.elapsed + EPSILON >= t.spawn) { t.active = true; emit(s,'demand',t.id); feedback(s, `${t.title} 新需求：${t.title}`); }
     if (!t.active || t.done || t.assigned || (s.action?.taskId === t.id && s.action.kind !== 'correction')) continue;
-    if(s.practice)continue;
+    if(s.practice||s.assessment&&s.chapterId==='preflight')continue;
     const age = s.elapsed - t.spawn;
     if (!t.warned && age + EPSILON >= t.patience - 10) { t.warned = true; feedback(s, `${t.title} 等候接近上限；10 秒內未回應，可能走到走道詢問。`, 'warning'); }
     if (!t.late && age + EPSILON >= t.patience) {
@@ -432,7 +424,7 @@ function demandTick(s) {
   }
 }
 function finish(s, reason) {
-  s.recovery=null;s.status = 'finished'; s.endReason = reason; s.dialog = null; s.action = null; s.lesson = null;
+  s.recovery=null;s.answerFeedback=null;s.correctFeedback=null;s.status = 'finished'; s.endReason = reason; s.dialog = null; s.action = null; s.lesson = null;
   s.player.walking = false;
   s.grade = reason !== 'complete' || !chapterReady(s) ? 'incomplete' : s.assessment ? 'assessment' : s.safetyErrors >= 2 ? 'retry' : s.safetyErrors === 1 ? 'recovered' : 'clean';
   s.result = s.grade; emit(s,'finish',null,{grade:s.grade});
@@ -448,7 +440,8 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
   if (!s.practice && s.elapsed + EPSILON >= s.duration) {
     s.elapsed = s.duration; finish(s, 'timeout'); return;
   }
-  if(!s.boarding&&!s.assessment)demandTick(s);
+  if(s.correctFeedback){s.correctFeedback.remaining=Math.max(0,s.correctFeedback.remaining-dt);if(s.correctFeedback.remaining<=EPSILON)s.correctFeedback=null;}
+  if(!s.boarding)demandTick(s);
   if (s.lesson) { updateNear(s); return; }
   if (s.handoffJob) {
     if(s.phase==='final-cabin-check'){
