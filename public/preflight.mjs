@@ -1,6 +1,6 @@
 import {initBoarding,tickBoarding,boardingChoices,boardingPassable,boardingTaskComplete,boardingReady,boardingTaskActor} from './boarding.mjs?v=training-modes-2';
 import {getChapter,DEFAULT_CHAPTER_ID} from './chapters/index.mjs?v=recording-time-1';
-import {assessmentDecision} from './assessment.mjs?v=training-modes-2';
+import {assessmentDecision} from './assessment.mjs?v=feedback-context-2';
 
 // Pure, deterministic preflight game state. This is a fictional game,
 // not aviation training or a representation of real operating procedures.
@@ -207,7 +207,7 @@ function choicesFor(s, t) {
   const v = t.variant;
   const mk = (id, label, good, duration = 5, extra = {}) => ({ id, label, good, duration, tags: [`${duration}秒`], ...extra });
   const repaired = '確認完成，繼續巡艙。';
-  let quote, description, choices, practiceQuote;
+  let quote, description, choices;
   if (t.id === 'bag') {
     quote = ['我的包可以放哪裡？', '這個包還沒放好。', '我已經放好了。'][v];
     description = ['走道有行李，頭頂櫃還有空位。', '走道有行李；旅客上方已滿，另一側有可用空櫃。', '行李已收妥，走道保持淨空。'][v];
@@ -215,7 +215,6 @@ function choicesFor(s, t) {
     choices.forEach(c => { c.feedback = c.good ? repaired : ['走道有行李，頭頂櫃有空位；現在需要協助收妥。', '旅客上方已滿，但另一側有空櫃；請使用畫面中的可用空櫃。', '行李已收妥、走道淨空；現在只需查看確認。'][v]; });
   } else if (t.id === 'belt') {
     quote = ['嗯？你剛剛說什麼？', '這個圖示是什麼意思？', '這樣可以了嗎？'][v];
-    practiceQuote=quote;
     description = ['旅客盯著手機，安全帶尚未扣好。', '旅客指著圖示，安全帶尚未扣好。', '旅客已扣好安全帶，等你查看。'][v];
     if(s.characterMemory?.elder?.helped)quote=`又見面了，謝謝你登機時幫我。${quote}`;
     choices = [mk('attention', '先請旅客抬頭，再示範扣法', v === 0), mk('diagram', '先指圖示，讓旅客照著操作', v === 1, 6), mk('check', '查看扣好的安全帶', v === 2, 4)];
@@ -260,7 +259,7 @@ function choicesFor(s, t) {
   }
   if(s.contextual)for(const c of choices)c.tags=c.tags.filter(tag=>!/^\d+秒$/.test(tag));
   t.quote = quote; t.description = description;
-  return { handoffHint: null, id: t.id, title: t.title, quote, practiceQuote:practiceQuote??quote, description, choices: shuffle(choices, rng(s.seed + s.decisionSerial++ * 97)) };
+  return { handoffHint: null, id: t.id, title: t.title, quote, description, choices: shuffle(choices, rng(s.seed + s.decisionSerial++ * 97)) };
 }
 
 export function interact(s) {
@@ -303,13 +302,6 @@ export function choose(s, index) {
   if(!judgment.attempts)judgment.firstChoice={label:choice.label,good:choice.good,mode:judgment.mode};
   if(!choice.good&&(t.kind==='safety'||choice.safetyError))judgment.safetyIncorrect=(judgment.safetyIncorrect||0)+1;
   judgment.attempts++;if(!choice.good)judgment.incorrect++;judgment.choiceId=choice.id;judgment.choiceLabel=choice.label;judgment.good=choice.good;judgment.feedback=choice.feedback;
-  // Preserve the actual missed decision: later service choices can have a
-  // different aisle, wait or handoff context. Practice never replays the run.
-  if(!choice.good)judgment.retryDecision={
-    title:s.dialog.title,quote:s.dialog.practiceQuote??s.dialog.quote,description:s.dialog.description,
-    task:{id:t.id,variant:t.variant,side:t.side,chapterId:s.chapterId},
-    choices:s.dialog.choices.map(c=>({label:c.label,good:c.good,feedback:c.feedback,tags:[...c.tags]}))
-  };
   if(s.assessment){
     // Do not run success/failure actions or emit correctness reactions. A
     // recorded decision is deliberately separate from a completed safety task.

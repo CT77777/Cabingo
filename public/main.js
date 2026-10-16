@@ -1,8 +1,7 @@
 import {ASSESSMENT_STORAGE_KEY,parseAssessmentBest,prepareAssessmentSave} from './assessment-records.mjs?v=training-modes-2';
-import {ASSESSMENT_VERSION,assessmentScope,assessmentSummary,assessmentFeedback} from './assessment.mjs?v=training-modes-2';
+import {ASSESSMENT_VERSION,assessmentScope,assessmentSummary,assessmentFeedback} from './assessment.mjs?v=feedback-context-2';
 import {createBoardingEvidence} from './boarding-ui.mjs?v=0.7.2';
-import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents,actionInput,ackRecovery} from './preflight.mjs?v=training-modes-2';
-import {retryCandidates,createRetry,retryPrompt,answerRetry,retryComparison} from './retry.mjs?v=training-modes-2';
+import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents,actionInput,ackRecovery} from './preflight.mjs?v=no-targeted-retry-1';
 import {BOARDING_TUTORIAL,boardingEvidence,boardingCoach,inspectBoardingClue} from './boarding.mjs?v=training-modes-2';
 import {layoutLabels,crossedMilestones,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=final-check-1';
 import {createCabinAudio} from './audio.mjs?v=carefree-1';
@@ -28,8 +27,6 @@ let assessmentBest={version:1,records:{}},assessmentStorageAvailable=true,assess
 try{assessmentBest=parseAssessmentBest(localStorage.getItem(ASSESSMENT_STORAGE_KEY));}catch{assessmentStorageAvailable=false;}
 const codexExitKeys=new Set();
 let codex, codexCanSave=true,codexOpen=false,codexReturn=null,learningAwardRun=null,newRewards=[],learningResultRun=null;
-let retrySession=null,retryOrigin=null,retryInputBlocked=false;
-const retryCompleted=new Map();
 try{const raw=localStorage.getItem(CODEX_STORAGE_KEY);codex=parseCodex(raw);codexCanSave=prepareCodexSave(raw,codex).raw!==null;}catch{codex=parseCodex(null);codexCanSave=false;}
 state=createState({chapterId:campaign.currentChapterId,characterMemory:campaign.characterMemory,handsOn:true,contextual:true,guidedBoarding:true,practice:true,seed:Math.floor(Math.random()*1e9)});state.reducedMotion=motion.matches;
 
@@ -99,7 +96,7 @@ function collectionFace(card,locked=false){
 }
 function renderCardRewards(){
  hide('cardRewards',!newRewards.length);$('resultCard').setAttribute('aria-describedby',newRewards.length?'rewardSummary cardRewardHint':'cardRewardHint');text('rewardSummary',`本次獲得 ${newRewards.length} 張收藏卡`);
- text('cardRewardHint',newRewards.length?'卡片已放進飛行收藏冊。':state.assessment?'考核成績與收藏分開；錯題重練不改寫本次成績。':state.practice?'情境演練不計星等或最佳紀錄；既有收藏仍可翻閱。':canAwardChapterCards(state)?'這次完成任務的卡片都已收藏。':'完成任務並成功通關後，就能獲得收藏卡。');
+ text('cardRewardHint',newRewards.length?'卡片已放進飛行收藏冊。':state.assessment?'考核成績與收藏分開。':state.practice?'情境演練不計星等或最佳紀錄；既有收藏仍可翻閱。':canAwardChapterCards(state)?'這次完成任務的卡片都已收藏。':'完成任務並成功通關後，就能獲得收藏卡。');
  $('rewardCards').replaceChildren(...newRewards.map(card=>{
   const button=document.createElement('button'),img=document.createElement('img'),copy=document.createElement('span'),serial=document.createElement('small'),title=document.createElement('b');button.className='reward-card';img.setAttribute('src',card.art+'?v=0.7.2');img.setAttribute('alt','');img.setAttribute('width','640');img.setAttribute('height','360');serial.textContent=`NEW / ${card.serial}`;title.textContent=card.collectibleTitle;copy.append(serial,title);button.append(img,copy);button.addEventListener('click',()=>openCodex(button,card.id));return button;
  }));
@@ -115,90 +112,30 @@ function knowledgeContent(card){
  return content;
 }
 function renderLearningResult(){
- if(learningResultRun===state.runId)return;learningResultRun=state.runId;retryCompleted.clear();renderCardRewards();renderRetryTasks();
+ if(learningResultRun===state.runId)return;learningResultRun=state.runId;renderCardRewards();
  text('trainingFeedbackTitle',state.assessment?'各題首次判斷與講評':'這次練習，哪裡做得好？');
  text('trainingScope',state.assessment?assessmentScope(state):state.practice?'本次為情境演練，不計時、不計星等。以下依實際操作提供建議。':'以下依本局操作提供練習建議，包含不計分教學；正式考核標準由訓練單位訂定。');
  const statusLabels={good:'做得好',improve:'需要改進',unobserved:'尚未評量'};
  $('trainingFeedbackList').replaceChildren(...(state.assessment?assessmentFeedback(state):trainingFeedback(state)).map(item=>{
   const card=document.createElement('article'),heading=document.createElement('h4'),badge=document.createElement('span'),evidence=document.createElement('p');
-  card.className='training-feedback-item';card.dataset.status=item.status;heading.textContent=item.title;badge.className='training-feedback-status';badge.textContent=statusLabels[item.status];heading.append(badge);evidence.className='training-feedback-evidence';evidence.textContent=item.evidence;card.append(heading,evidence);
-  for(const [label,copy] of [['影響',item.impact],['下次怎麼練',item.advice]]){const line=document.createElement('p'),caption=document.createElement('strong'),body=document.createElement('span');caption.textContent=`${label}：`;body.textContent=copy;line.append(caption,body);card.append(line);}
+  card.className='training-feedback-item';card.dataset.status=item.status;heading.textContent=item.title;badge.className='training-feedback-status';badge.textContent=statusLabels[item.status];heading.append(badge);card.append(heading);
+  if(state.assessment){
+    const fields=[['情境',item.context],['選擇做法',item.firstChoice]];
+    if(item.status!=='good')fields.push(['正確做法',item.correctAction],['講解',item.reason]);
+    for(const [label,copy] of fields){
+      const line=document.createElement('p'),caption=document.createElement('strong'),body=document.createElement('span');
+      caption.textContent=`${label}：`;body.textContent=copy;line.append(caption,body);card.append(line);
+    }
+  }else{
+    evidence.className='training-feedback-evidence';evidence.textContent=item.evidence;card.append(evidence);
+    for(const [label,copy] of [['影響',item.impact],['下次怎麼練',item.advice]]){const line=document.createElement('p'),caption=document.createElement('strong'),body=document.createElement('span');caption.textContent=`${label}：`;body.textContent=copy;line.append(caption,body);card.append(line);}
+  }
   return card;
  }));
 
 }
-function renderRetryTasks(){
- const candidates=retryCandidates(state);
- text('retryPracticeHint',candidates.length?'從這局曾選錯的情境開始，不用整關重玩。這裡練的是同一道題。':'這局沒有選錯的題目；下次遇到錯題，就能在這裡直接重練。');
- $('retryTaskList').replaceChildren(...candidates.map(candidate=>{
-  const button=document.createElement('button'),title=document.createElement('strong'),detail=document.createElement('small'),badge=document.createElement('span'),icon=document.createElement('span'),label=document.createElement('span');
-  button.className='retry-task';title.textContent=`重練 · ${candidate.title}`;
-  const mode={assessment:'模擬考核',tutorial:'教學',practice:'情境演練',formal:'正式挑戰'}[candidate.mode]||'本局';
-  detail.textContent=`${mode}中曾選錯 ${candidate.previousIncorrect} 次`;
-  badge.className='retry-complete';badge.hidden=true;icon.className='retry-complete-icon';icon.textContent='✓';icon.setAttribute('aria-hidden','true');label.textContent='已完成';badge.append(icon,label);
-  button.append(title,detail,badge);updateRetryTask(button,retryCompleted.get(candidate.taskId));button.addEventListener('click',event=>openRetry(candidate.taskId,button,event));return button;
- }));
-}
-function updateRetryTask(button,incorrect){
- const complete=incorrect!==undefined;button.dataset.complete=String(complete);button.children[2].hidden=!complete;
- if(complete)button.children[1].textContent=`原題重練完成 · 這次選錯 ${incorrect} 次`;
-}
-function openRetry(taskId,trigger,event={}){
- if(!ready||state.status!=='finished'||codexOpen||retrySession||codexExitKeys.size)return;
- const candidate=retryCandidates(state).find(c=>c.taskId===taskId);if(!candidate)return;
- retrySession=createRetry(candidate);retryOrigin=trigger;retryInputBlocked=!event.detail;
- clearMovement();hide('retryOverlay',false);$('resultOverlay').inert=true;renderRetry();$('retryTitle').focus({preventScroll:true});
-}
-function renderRetry(){
- if(!retrySession)return;
- const session=retrySession,d=session.decision,comparison=retryComparison(session);
- text('retryTitle',retryPrompt(session));text('retryQuote',`旅客：「${d.quote}」`);text('retryContext',d.description);
- const evidence=session.boarding?boardingEvidence(d.task):[];
- hide('retryEvidence',!evidence.length);$('retryEvidence').replaceChildren(...createBoardingEvidence(document,evidence));
- hide('retryReference',!evidence.some(item=>item.kind==='pass'));
- hide('retryQuestion',session.complete);hide('retryComparison',!session.complete);hide('retryReturn',!session.complete);
- hide('retryFeedback',!session.feedback);text('retryFeedback',session.complete?`答對了。${session.feedback}`:`${session.feedback} 看清線索，再選一次。`);
- $('retryFeedback').dataset.correct=String(session.complete);
- if(comparison){text('retryBefore',comparison.before);text('retryAfter',comparison.after);text('retryComparisonNote',comparison.note);}
- // Keep the order stable while retrying, so feedback never moves a choice.
- if(!session.attempts)$('retryChoices').replaceChildren(...d.choices.map((choice,index)=>{
-  const button=document.createElement('button'),number=document.createElement('b'),label=document.createElement('span');
-  button.className='choice';number.textContent=String(index+1);label.textContent=choice.label;button.append(number,label);
-  button.addEventListener('click',event=>selectRetry(index,event));return button;
- }));
-}
-function selectRetry(index,event={}){
- if(!retrySession||!event.detail&&retryInputBlocked||!answerRetry(retrySession,index))return;
- retryInputBlocked=true;renderRetry();
- if(retrySession.complete){retryCompleted.set(retrySession.taskId,retrySession.incorrect);$('retryComparisonTitle').focus({preventScroll:true});}
- else $('retryFeedback').focus({preventScroll:true});
-}
-function closeRetry(){
- if(!retrySession)return;
- for(const key of held)if(['Enter','NumpadEnter','Space'].includes(key))codexExitKeys.add(key);
- const trigger=retryOrigin,incorrect=retryCompleted.get(retrySession.taskId);
- retrySession=null;retryOrigin=null;hide('retryOverlay',true);$('resultOverlay').inert=false;clearMovement();
- if(trigger)updateRetryTask(trigger,incorrect);
- trigger?.focus({preventScroll:true});
-}
-$('closeRetry').addEventListener('click',event=>{if(event.detail||!retryInputBlocked)closeRetry();});
-$('retryReturn').addEventListener('click',event=>{if(event.detail||!retryInputBlocked)closeRetry();});
-$('retryAgain').addEventListener('click',event=>{
- if(!retrySession||!retrySession.complete||!event.detail&&retryInputBlocked)return;
- retrySession=createRetry(retrySession);retryInputBlocked=true;renderRetry();$('retryTitle').focus({preventScroll:true});
-});
-function handleRetryKey(event){
- const code=physical(event),wasHeld=held.has(code);held.add(code);
- if((event.repeat||wasHeld)&&['Escape','Tab','Enter','NumpadEnter','Space','Digit1','Digit2','Digit3','Numpad1','Numpad2','Numpad3'].includes(code)){event.preventDefault();return;}
- if(['Enter','NumpadEnter','Space'].includes(code)||/^(Digit|Numpad)[123]$/.test(code))retryInputBlocked=false;
- if(code==='Escape'){event.preventDefault();closeRetry();}
- else if(code==='Tab'){
-  const controls=modalControls('retryOverlay'),index=controls.indexOf(document.activeElement);event.preventDefault();
-  (controls[index<0?(event.shiftKey?controls.length-1:0):(index+(event.shiftKey?-1:1)+controls.length)%controls.length]||$('closeRetry')).focus();
- }else if(/^(Digit|Numpad)[123]$/.test(code)){event.preventDefault();selectRetry(Number(code.slice(-1))-1);}
-}
 function openCodex(trigger,selectedCardId=null){
- if(codexOpen||retrySession||codexExitKeys.size||!['briefing','finished'].includes(state.status))return;codexOpen=true;codexReturn=trigger;releaseAll();captureLearning();let selectedEntry=null;
+ if(codexOpen||codexExitKeys.size||!['briefing','finished'].includes(state.status))return;codexOpen=true;codexReturn=trigger;releaseAll();captureLearning();let selectedEntry=null;
  text('codexProgress',`已收藏 ${codexUnlockedCount()} / ${KNOWLEDGE.length}`);text('codexStorage',codexCanSave?'收藏保存在這個瀏覽器。':'目前僅在本次遊戲保留；既有或新版資料不會被覆寫。');
  $('codexContent').replaceChildren(...[...new Set(KNOWLEDGE.map(c=>c.category))].map(category=>{
   const group=document.createElement('section'),heading=document.createElement('h3'),shelf=document.createElement('div');heading.textContent=category;shelf.className='collection-grid';group.append(heading,shelf);
@@ -239,7 +176,7 @@ function renderChapterMenu(){
   b.append(label,detail);b.addEventListener('click',()=>selectChapter(chapter.id));return b;
  }));
 }
-function fail(error){closeRetry();closeCodex();for(const id of ['resultOverlay','missionHud','lessonOverlay','recoveryOverlay','timeWarning','speechBubble'])hide(id,true);hide('aisleAlert',true);document.body.dataset.aisleAlert='false';text('aisleAlertTitle','');audio.dispose();ready=false;releaseAll();pause(state);hide('loading',true);hide('briefCard',true);hide('webglError',false);hide('decisionCard',true);hide('lessonCard',true);hide('pauseCard',true);hide('awayOverlay',true);$('gameSurface').inert=false;hide('resultCard',true);for(const id of ['startButton','assessmentButton','interactButton','pauseButton','cameraButton','infoButton'])$(id).disabled=true;document.body.dataset.panel='error';text('sceneStatus','3D 顯示未能啟動');text('feedback','請使用支援 WebGL 2 的瀏覽器，確認圖形加速可用後重新載入。');console.error('Cabin 3D could not start:',error?.message||error);}
+function fail(error){closeCodex();for(const id of ['resultOverlay','missionHud','lessonOverlay','recoveryOverlay','timeWarning','speechBubble'])hide(id,true);hide('aisleAlert',true);document.body.dataset.aisleAlert='false';text('aisleAlertTitle','');audio.dispose();ready=false;releaseAll();pause(state);hide('loading',true);hide('briefCard',true);hide('webglError',false);hide('decisionCard',true);hide('lessonCard',true);hide('pauseCard',true);hide('awayOverlay',true);$('gameSurface').inert=false;hide('resultCard',true);for(const id of ['startButton','assessmentButton','interactButton','pauseButton','cameraButton','infoButton'])$(id).disabled=true;document.body.dataset.panel='error';text('sceneStatus','3D 顯示未能啟動');text('feedback','請使用支援 WebGL 2 的瀏覽器，確認圖形加速可用後重新載入。');console.error('Cabin 3D could not start:',error?.message||error);}
 function renderChoices(){const d=state.dialog;if(!d)return;const hidePolicyHint=state.phase==='final-cabin-check'&&!state.practice&&state.tasks.some(t=>t.id===d.id&&t.kind==='service');text('decisionDescription',d.recoveryFeedback||(hidePolicyHint&&!state.assessment?'':d.description));$('decisionDescription').dataset.kind=d.recoveryFeedback?'warning':'normal';hide('decisionDescription',!d.recoveryFeedback&&(hidePolicyHint&&!state.assessment||!state.assessment&&!!state.boarding&&['guide','seat','bag','family'].includes(d.id)));const signature=state.decisionSerial+':'+d.id+':'+(state.boarding?.coach?.examined.join(',')||'');if(signature===dialogSignature)return;dialogSignature=signature;const task=state.tasks.find(t=>t.id===d.id);text('decisionTitle',d.title);$('choices').dataset.count=String(d.choices.length);const evidence=state.boarding?boardingEvidence(task):[];hide('evidenceCards',!evidence.length);$('evidenceCards').replaceChildren(...createBoardingEvidence(document,evidence,{interactive:d.id==='guide'&&!!state.boarding?.coach,examined:state.boarding?.coach?.examined||[],onInspect:inspectEvidence}));hide('flightReference',!evidence.some(e=>e.kind==='pass'));text('decisionQuote',`「${d.quote}」`);$('choices').replaceChildren(...d.choices.map((c,index)=>{const b=document.createElement('button');b.className='choice';b.disabled=d.id==='guide'&&!!state.boarding?.coach&&state.boarding.coach.examined.length<2;b.setAttribute('aria-disabled',String(b.disabled));b.dataset.choice=String(index);const n=document.createElement('b'),copy=document.createElement('span'),label=document.createElement('span'),tags=document.createElement('small');n.textContent=String(index+1);copy.className='choice-copy';label.textContent=c.label;tags.className='choice-tags';for(const t of c.tags){const tag=document.createElement('span');tag.textContent=t;tags.append(tag);}copy.append(label,tags);b.append(n,copy);b.addEventListener('click',event=>selectChoice(index,event));return b;}));}
 function refresh(force=false){captureLearning();const c=counts(state),totalSafety=state.tasks.filter(t=>t.kind==='safety').length,totalService=state.tasks.filter(t=>t.kind==='service').length,panel=panelName(),signature=[state.boarding?.tutorialStep,state.boarding?.formal,state.boarding?.standing,state.boarding?.blockedStanding,state.boarding?.congestionTime.toFixed(1),state.boarding?.actors.filter(a=>['seated','exited'].includes(a.status)).length,ready,panel,pauseReason,infoOpen,state.near,state.dialog?.id,state.decisionSerial,state.dialog?.retrySerial,state.lesson?.id,state.feedback,state.feedbackKind,state.cameraMode,state.elapsed.toFixed(1),state.player.x.toFixed(1),state.player.z.toFixed(1),state.mistakes,state.safetyErrors,state.handoffTokens,state.handoffJob?.remaining.toFixed(1),state.recovery?.ready,state.action?.kind,Math.ceil(state.action?.time||0),...state.tasks.map(t=>[t.active,t.done,t.assessmentAnswered,t.deferred,t.assigned,t.late,t.warned,t.patience].join(',')),c.hazards].join('|');if(!force&&signature===uiSignature)return;uiSignature=signature;document.body.dataset.panel=panel;document.body.dataset.decisionKind=state.tasks.find(t=>t.id===state.dialog?.id)?.kind||'none';syncPresentation();
  hide('briefCard',panel!=='brief');hide('decisionCard',panel!=='decision');hide('lessonCard',panel!=='lesson');hide('lessonOverlay',panel!=='lesson');hide('pauseCard',panel!=='pause'||pauseReason==='focus');hide('awayOverlay',panel!=='pause');hide('focusPauseCard',pauseReason!=='focus');$('awayOverlay').setAttribute('aria-labelledby',pauseReason==='focus'?'awayTitle':'pauseTitle');$('awayOverlay').setAttribute('aria-describedby',pauseReason==='focus'?'awayCopy':'pauseCopy');$('gameSurface').inert=codexOpen||panel==='pause'||panel==='recovery'||panel==='lesson'||panel==='result';hide('recoveryOverlay',panel!=='recovery');if(state.recovery){text('recoveryFoot',(state.practice||state.boarding&&!state.boarding.formal)?'教學與練習可安心重試，不記錄失誤。':'這段說明讀完再繼續，失誤紀錄會保留。');text('recoveryCopy',state.recovery.copy);text('recoveryCost',(state.practice||state.boarding&&!state.boarding.formal)?'教學與練習不扣分，可以重新選擇。':state.recovery.ready?'修正完成。這次失誤仍保留，閱讀期間倒數暫停。':'正在修正這次處理，計入 2 秒行動時間。');$('recoveryContinue').setAttribute('aria-disabled',String(!state.recovery.ready));$('recoveryProgress').value=state.action?.time||2;hide('recoveryProgress',state.recovery.ready);}hide('rulesPanel',!infoOpen);$('infoButton').setAttribute('aria-expanded',String(panel==='pause'&&infoOpen));text('pauseTitle',infoOpen?'巡艙說明':'巡艙暫停中');$('pauseInfoButton').setAttribute('aria-expanded',String(infoOpen));text('awayResumeButton',pauseReturn==='manual'?'返回暫停畫面':'繼續巡艙');hide('resultCard',panel!=='result');hide('resultOverlay',panel!=='result');hide('missionHud',!['idle','decision'].includes(panel));hide('idleCard',['decision','lesson','pause','result','recovery'].includes(panel));
@@ -321,7 +258,7 @@ function renderResult(chapter,c,totalSafety,totalService){
 }
 
 function begin(practice=true){if(codexOpen||!ready||state.status!=='briefing')return;unlockAudio();audio.reset(state.runId);state.practice=practice;start(state);releaseAll();refresh(true);if(state.lesson)focusPanel('lessonCard');else focusScene();}
-function fresh(practice=true,autostart=true,assessment=state.assessment&&autostart){if(codexOpen||retrySession||!ready)return;newRewards=[];$('rewardCards').replaceChildren();pauseReason='manual';pauseReturn='playing';infoOpen=false;$('pauseOptions').open=false;suppressAwayClick=false;resumeBlockedKeys.clear();const camera=state.cameraMode;state=createState({chapterId:campaign.currentChapterId,assessment,characterMemory:campaign.characterMemory,handsOn:true,contextual:true,guidedBoarding:true,practice:assessment?false:practice,seed:Math.floor(Math.random()*1e9)});state.cameraMode=camera;state.reducedMotion=motion.matches;state.lessonSeen=rememberedLessons.filter(x=>getChapter(state.chapterId).tutorial.includes(x));dialogSignature='';suppressInheritedChoiceClick=false;releaseAll();audio.reset(state.runId);audioCursor=null;previousAction=null;if(autostart){unlockAudio();start(state);}refresh(true);if(autostart){if(state.lesson)focusPanel('lessonCard');else focusScene();}}
+function fresh(practice=true,autostart=true,assessment=state.assessment&&autostart){if(codexOpen||!ready)return;newRewards=[];$('rewardCards').replaceChildren();pauseReason='manual';pauseReturn='playing';infoOpen=false;$('pauseOptions').open=false;suppressAwayClick=false;resumeBlockedKeys.clear();const camera=state.cameraMode;state=createState({chapterId:campaign.currentChapterId,assessment,characterMemory:campaign.characterMemory,handsOn:true,contextual:true,guidedBoarding:true,practice:assessment?false:practice,seed:Math.floor(Math.random()*1e9)});state.cameraMode=camera;state.reducedMotion=motion.matches;state.lessonSeen=rememberedLessons.filter(x=>getChapter(state.chapterId).tutorial.includes(x));dialogSignature='';suppressInheritedChoiceClick=false;releaseAll();audio.reset(state.runId);audioCursor=null;previousAction=null;if(autostart){unlockAudio();start(state);}refresh(true);if(autostart){if(state.lesson)focusPanel('lessonCard');else focusScene();}}
 
 function performInteraction(){if(state.recovery)return;if(!ready||state.near==='report'&&!chapterReady(state))return;if(state.action?.interaction){actionInput(state,state.action.interaction.held?'release':'press');refresh(true);return;}clearMovement();if(interact(state)&&state.dialog){choiceBlockedKeys.clear();suppressInheritedChoiceClick=held.has('Space');}refresh(true);}
 function selectChoice(index,event={}){
@@ -390,7 +327,7 @@ $('interactButton').addEventListener('click',e=>{if(suppressActionClick&&e.detai
 const directionCodes={KeyW:'up',ArrowUp:'up',KeyS:'down',ArrowDown:'down',KeyA:'left',ArrowLeft:'left',KeyD:'right',ArrowRight:'right'};
 const fallbackCodes={w:'KeyW',s:'KeyS',a:'KeyA',d:'KeyD',' ':'Space',Spacebar:'Space',c:'KeyC','1':'Digit1','2':'Digit2','3':'Digit3',ArrowUp:'ArrowUp',ArrowDown:'ArrowDown',ArrowLeft:'ArrowLeft',ArrowRight:'ArrowRight',Escape:'Escape'};
 function physical(e){return e.code&&e.code!=='Unidentified'?e.code:(fallbackCodes[e.key]||fallbackCodes[e.key?.toLowerCase()]||e.key||'');}
-window.addEventListener('keydown',e=>{if(codexExitKeys.has(physical(e))){e.preventDefault();return;}if(retrySession){if(!e.metaKey&&!e.ctrlKey&&!e.altKey)handleRetryKey(e);return;}if(codexOpen){const code=physical(e);if(['Enter','NumpadEnter','Space'].includes(code)){if(e.repeat)e.preventDefault();else held.add(code);}if(code==='Escape'){e.preventDefault();if(!e.repeat)closeCodex();}else if(code==='Tab'){const controls=codexControls();const index=controls.indexOf(document.activeElement);e.preventDefault();(controls[index<0?(e.shiftKey?controls.length-1:0):(index+(e.shiftKey?-1:1)+controls.length)%controls.length]||$('closeCodex')).focus();}return;}if(!ready||e.metaKey||e.ctrlKey||e.altKey||((/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName)||e.target?.isContentEditable)&&physical(e)!=='Escape'&&!(state.status==='paused'&&physical(e)==='Tab')))return;const code=physical(e),dir=directionCodes[code],wasHeld=held.has(code);if(resumeBlockedKeys.has(code)){if(e.repeat||wasHeld){e.preventDefault();return;}resumeBlockedKeys.delete(code);suppressAwayClick=['Space','Enter','NumpadEnter'].some(c=>resumeBlockedKeys.has(c));}held.add(code);if(state.status==='finished'){if(code==='Tab'){const controls=modalControls('resultCard'),index=controls.indexOf(document.activeElement);e.preventDefault();controls[index<0?(e.shiftKey?controls.length-1:0):(index+(e.shiftKey?-1:1)+controls.length)%controls.length]?.focus();}else if(code==='KeyC'||dir||(e.repeat||wasHeld)&&['Space','Enter','NumpadEnter'].includes(code))e.preventDefault();return;}if(state.status==='paused'&&pauseReason!=='focus'&&code==='Tab'){const controls=[...$('pauseCard').querySelectorAll('button,input,summary,a')].filter(el=>!el.disabled&&el.getClientRects().length);if(controls.length){const index=controls.indexOf(document.activeElement),next=index<0?(e.shiftKey?controls.length-1:0):(index+(e.shiftKey?-1:1)+controls.length)%controls.length;e.preventDefault();controls[next].focus();}return;}if(state.status==='paused'&&pauseReason==='focus'){if(['Enter','NumpadEnter','Space','Escape'].includes(code)){e.preventDefault();if(!e.repeat&&!wasHeld)resumeAway({keyboard:true,code});}else if(code==='Tab'){e.preventDefault();$('awayResumeButton').focus({preventScroll:true});}return;}if(state.dialog&&!e.repeat&&!wasHeld){choiceBlockedKeys.delete(code);if(['Space','Enter','NumpadEnter'].includes(code))suppressInheritedChoiceClick=false;}if(state.status==='playing'&&state.lesson&&code==='Tab'){e.preventDefault();const controls=(state.lesson.id==='serviceIntro'?['demoWait','demoSafety','demoHandoff','lessonContinue']:['lessonContinue']).map($).filter(b=>!b.disabled);const i=controls.indexOf(document.activeElement);controls[(i+(e.shiftKey?-1:1)+controls.length)%controls.length]?.focus();return;}if(state.status==='playing'&&state.lesson&&(e.repeat||wasHeld)&&['Enter','NumpadEnter'].includes(code)){e.preventDefault();return;}if(state.lesson&&!e.repeat&&!wasHeld&&['Space','Enter','NumpadEnter'].includes(code)&&lessonArmed)suppressInheritedLessonClick=false;if(state.recovery&&state.status==='playing'){if(code==='Escape'&&!e.repeat&&!wasHeld){e.preventDefault();togglePause();}else if(code==='Tab'){e.preventDefault();$('recoveryContinue').focus();}else if(['Enter','NumpadEnter','Space'].includes(code)){e.preventDefault();if(!e.repeat&&!wasHeld)continueRecovery();}return;}if(e.target?.tagName==='BUTTON'&&dir)return;if(dir&&state.status==='playing'&&!state.dialog&&!state.lesson){e.preventDefault();if(!state.action)keys.add(dir);return;}if((e.repeat||wasHeld)&&code==='Space'){e.preventDefault();return;}if(e.repeat||wasHeld)return;if(code==='Escape'&&['playing','paused'].includes(state.status)){e.preventDefault();togglePause();}else if(code==='Space'&&(!e.target||e.target===canvas||e.target===document.body||e.target===$('joystick'))&&state.status==='playing'&&!state.dialog&&!state.lesson){e.preventDefault();if(state.contextual&&state.action)return;if(state.action?.interaction){actionInput(state,'press');refresh(true);}else performInteraction();}else if(/^(Digit|Numpad)[123]$/.test(code)&&state.dialog&&state.status==='playing'&&!state.lesson){e.preventDefault();selectChoice(Number(code.slice(-1))-1,{code});}else if(code==='KeyC'){e.preventDefault();toggleCamera();}});
+window.addEventListener('keydown',e=>{if(codexExitKeys.has(physical(e))){e.preventDefault();return;}if(codexOpen){const code=physical(e);if(['Enter','NumpadEnter','Space'].includes(code)){if(e.repeat)e.preventDefault();else held.add(code);}if(code==='Escape'){e.preventDefault();if(!e.repeat)closeCodex();}else if(code==='Tab'){const controls=codexControls();const index=controls.indexOf(document.activeElement);e.preventDefault();(controls[index<0?(e.shiftKey?controls.length-1:0):(index+(e.shiftKey?-1:1)+controls.length)%controls.length]||$('closeCodex')).focus();}return;}if(!ready||e.metaKey||e.ctrlKey||e.altKey||((/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName)||e.target?.isContentEditable)&&physical(e)!=='Escape'&&!(state.status==='paused'&&physical(e)==='Tab')))return;const code=physical(e),dir=directionCodes[code],wasHeld=held.has(code);if(resumeBlockedKeys.has(code)){if(e.repeat||wasHeld){e.preventDefault();return;}resumeBlockedKeys.delete(code);suppressAwayClick=['Space','Enter','NumpadEnter'].some(c=>resumeBlockedKeys.has(c));}held.add(code);if(state.status==='finished'){if(code==='Tab'){const controls=modalControls('resultCard'),index=controls.indexOf(document.activeElement);e.preventDefault();controls[index<0?(e.shiftKey?controls.length-1:0):(index+(e.shiftKey?-1:1)+controls.length)%controls.length]?.focus();}else if(code==='KeyC'||dir||(e.repeat||wasHeld)&&['Space','Enter','NumpadEnter'].includes(code))e.preventDefault();return;}if(state.status==='paused'&&pauseReason!=='focus'&&code==='Tab'){const controls=[...$('pauseCard').querySelectorAll('button,input,summary,a')].filter(el=>!el.disabled&&el.getClientRects().length);if(controls.length){const index=controls.indexOf(document.activeElement),next=index<0?(e.shiftKey?controls.length-1:0):(index+(e.shiftKey?-1:1)+controls.length)%controls.length;e.preventDefault();controls[next].focus();}return;}if(state.status==='paused'&&pauseReason==='focus'){if(['Enter','NumpadEnter','Space','Escape'].includes(code)){e.preventDefault();if(!e.repeat&&!wasHeld)resumeAway({keyboard:true,code});}else if(code==='Tab'){e.preventDefault();$('awayResumeButton').focus({preventScroll:true});}return;}if(state.dialog&&!e.repeat&&!wasHeld){choiceBlockedKeys.delete(code);if(['Space','Enter','NumpadEnter'].includes(code))suppressInheritedChoiceClick=false;}if(state.status==='playing'&&state.lesson&&code==='Tab'){e.preventDefault();const controls=(state.lesson.id==='serviceIntro'?['demoWait','demoSafety','demoHandoff','lessonContinue']:['lessonContinue']).map($).filter(b=>!b.disabled);const i=controls.indexOf(document.activeElement);controls[(i+(e.shiftKey?-1:1)+controls.length)%controls.length]?.focus();return;}if(state.status==='playing'&&state.lesson&&(e.repeat||wasHeld)&&['Enter','NumpadEnter'].includes(code)){e.preventDefault();return;}if(state.lesson&&!e.repeat&&!wasHeld&&['Space','Enter','NumpadEnter'].includes(code)&&lessonArmed)suppressInheritedLessonClick=false;if(state.recovery&&state.status==='playing'){if(code==='Escape'&&!e.repeat&&!wasHeld){e.preventDefault();togglePause();}else if(code==='Tab'){e.preventDefault();$('recoveryContinue').focus();}else if(['Enter','NumpadEnter','Space'].includes(code)){e.preventDefault();if(!e.repeat&&!wasHeld)continueRecovery();}return;}if(e.target?.tagName==='BUTTON'&&dir)return;if(dir&&state.status==='playing'&&!state.dialog&&!state.lesson){e.preventDefault();if(!state.action)keys.add(dir);return;}if((e.repeat||wasHeld)&&code==='Space'){e.preventDefault();return;}if(e.repeat||wasHeld)return;if(code==='Escape'&&['playing','paused'].includes(state.status)){e.preventDefault();togglePause();}else if(code==='Space'&&(!e.target||e.target===canvas||e.target===document.body||e.target===$('joystick'))&&state.status==='playing'&&!state.dialog&&!state.lesson){e.preventDefault();if(state.contextual&&state.action)return;if(state.action?.interaction){actionInput(state,'press');refresh(true);}else performInteraction();}else if(/^(Digit|Numpad)[123]$/.test(code)&&state.dialog&&state.status==='playing'&&!state.lesson){e.preventDefault();selectChoice(Number(code.slice(-1))-1,{code});}else if(code==='KeyC'){e.preventDefault();toggleCamera();}});
 window.addEventListener('keyup',e=>{if(codexExitKeys.delete(physical(e))){e.preventDefault();held.delete(physical(e));return;}const code=physical(e),dir=directionCodes[code],blocked=resumeBlockedKeys.delete(code);if(blocked)e.preventDefault();suppressAwayClick=['Space','Enter','NumpadEnter'].some(c=>resumeBlockedKeys.has(c));held.delete(code);choiceBlockedKeys.delete(code);if(code==='Space'&&!blocked&&state.status==='playing'){actionInput(state,'release');refresh(true);}if(dir)keys.delete(dir);if(!held.size)lessonArmed=true;});
 function loseFocus(){codexExitKeys.clear();
  if(!ready||!['playing','paused'].includes(state.status)){releaseAll();return;}

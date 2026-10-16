@@ -25,7 +25,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     setPointerCapture(id){this.captures.push(id);}
   }
   for(const m of html.matchAll(/<([\w-]+)\b[^>]*\bid="([^"]+)"[^>]*>/g)){const e=ids[m[2]]=new Element(m[1],m[2]);e.hidden=/\bhidden(?:\s|>|=)/.test(m[0]);e.disabled=/\bdisabled(?:\s|>|=)/.test(m[0]);e.open=/\bopen(?:\s|>|=)/.test(m[0]);}
-  ids.decisionCard.append(ids.choices,ids.closeDecision);ids.lessonCard.append(ids.lessonContinue);ids.pauseCard.append(ids.resumeButton,ids.restartButton,ids.modeButton);ids.resultCard.append(ids.nextChapterButton,ids.replayButton,ids.resultMenuButton,ids.resultDetails,ids.bestRecord,ids.resultCodexButton);ids.resultCard.append(ids.retryTaskList);ids.retryOverlay.append(ids.closeRetry,ids.retryTitle,ids.retryQuestion,ids.retryFeedback,ids.retryComparison,ids.retryReturn);ids.retryQuestion.append(ids.retryQuote,ids.retryContext,ids.retryEvidence,ids.retryChoices);ids.retryComparison.append(ids.retryComparisonTitle,ids.retryBefore,ids.retryAfter,ids.retryComparisonNote,ids.retryAgain);ids.resultOverlay.append(ids.resultCard);ids.briefCard.append(ids.startButton,ids.assessmentButton);
+  ids.decisionCard.append(ids.choices,ids.closeDecision);ids.lessonCard.append(ids.lessonContinue);ids.pauseCard.append(ids.resumeButton,ids.restartButton,ids.modeButton);ids.resultCard.append(ids.nextChapterButton,ids.replayButton,ids.resultMenuButton,ids.resultDetails,ids.bestRecord,ids.resultCodexButton);ids.resultOverlay.append(ids.resultCard);ids.briefCard.append(ids.startButton,ids.assessmentButton);
   ids.codexOverlay.append(ids.closeCodex,ids.codexContent);
   const buttons=['up','left','down','right'].map(dir=>{const b=new Element('button');b.dataset.dir=dir;return b;});
   document={body:new Element('body'),hidden:false,activeElement:ids.sceneCanvas,getElementById:id=>{assert(ids[id],`unknown DOM ID ${id}`);return ids[id];},createElement:tag=>new Element(tag),querySelectorAll:selector=>{assert.equal(selector,'[data-dir]');return buttons;},addEventListener:(name,fn)=>(documentEvents[name]??=[]).push(fn)};
@@ -55,7 +55,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
   return {ids,buttons,api,document,motion,phoneMedia,calls,raf,storage,fakeView,Element,dispatch,key,up,tap,step,begin,approach,open,choice,dismiss,finishWork,state:()=>api.getState(),button:dir=>({get captures(){return ids.joystick.captures;},dispatch(type,event){const offset={up:[0,-42],down:[0,42],left:[-42,0],right:[42,0]}[dir];return ids.joystick.dispatch(type,{...event,clientX:58+offset[0],clientY:58+offset[1]});}}),visibility(hidden){document.hidden=hidden;for(const fn of documentEvents.visibilitychange||[])fn();}};
 }
 (async()=>{
-  const logic={...await import(pathToFileURL(path.join(root,'public/preflight.mjs'))),...await import(pathToFileURL(path.join(root,'public/presentation.mjs'))),...await import(pathToFileURL(path.join(root,'public/results.mjs'))),...await import(pathToFileURL(path.join(root,'public/assessment.mjs'))),...await import(pathToFileURL(path.join(root,'public/assessment-records.mjs'))),...await import(pathToFileURL(path.join(root,'public/chapters/index.mjs'))),...await import(pathToFileURL(path.join(root,'public/campaign.mjs'))),...await import(pathToFileURL(path.join(root,'public/interaction.mjs'))),...await import(pathToFileURL(path.join(root,'public/boarding.mjs'))),...await import(pathToFileURL(path.join(root,'public/boarding-ui.mjs'))),...await import(pathToFileURL(path.join(root,'public/retry.mjs'))),...await import(pathToFileURL(path.join(root,'public/learning.mjs'))),...await import(pathToFileURL(path.join(root,'public/knowledge/index.mjs')))};
+  const logic={...await import(pathToFileURL(path.join(root,'public/preflight.mjs'))),...await import(pathToFileURL(path.join(root,'public/presentation.mjs'))),...await import(pathToFileURL(path.join(root,'public/results.mjs'))),...await import(pathToFileURL(path.join(root,'public/assessment.mjs'))),...await import(pathToFileURL(path.join(root,'public/assessment-records.mjs'))),...await import(pathToFileURL(path.join(root,'public/chapters/index.mjs'))),...await import(pathToFileURL(path.join(root,'public/campaign.mjs'))),...await import(pathToFileURL(path.join(root,'public/interaction.mjs'))),...await import(pathToFileURL(path.join(root,'public/boarding.mjs'))),...await import(pathToFileURL(path.join(root,'public/boarding-ui.mjs'))),...await import(pathToFileURL(path.join(root,'public/learning.mjs'))),...await import(pathToFileURL(path.join(root,'public/knowledge/index.mjs')))};
 
   const test=(name,fn)=>{try{fn();results.push({name,passed:true});console.log('PASS',name);}catch(error){results.push({name,passed:false,error:error.message,stack:error.stack});console.error('FAIL',name,'\n ',error.message);}};
   function finishAssessment(h,{wrong={},elapsed=35}={}){
@@ -84,6 +84,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
       assert.equal(saved.stars,3);assert.equal(saved.elapsed,35);assert.equal(saved.total,chapterId==='boarding'?5:6);
       assert(h.ids.resultStars.textContent.includes('3 / 3'));assert(h.ids.bestRecord.textContent.includes('已更新'));
       assert.equal(h.ids.trainingFeedbackList.children.length,s.tasks.length);assert.equal(h.ids.priorityCount.textContent,'1 / 1');
+      for(const card of h.ids.trainingFeedbackList.children){assert.equal(card.children[0].children.length,1,'assessment retains the status badge');assert.equal(card.children.length,3);assert.deepEqual(card.children.slice(1).map(line=>line.children[0].textContent),['情境：','選擇做法：']);assert(card.children.slice(1).every(line=>line.children[1].textContent));}
       assert(h.ids.scoreRow.hidden&&h.ids.handoffCount.hidden);assert.equal(h.storage['cabin3d-best-final-check-v1'],undefined);
       h.api.refresh(true);assert.equal(h.storage[logic.ASSESSMENT_STORAGE_KEY],raw);
       h.ids.replayButton.click({detail:1});assert(h.state().assessment);assert.equal(h.state().chapterId,chapterId);assert.equal(h.state().judgments.length,0);
@@ -100,11 +101,11 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     menu();finishAssessment(h,{elapsed:30});assert.equal(JSON.parse(storage[logic.ASSESSMENT_STORAGE_KEY]).records['boarding:2'].elapsed,30);
     menu();h.ids.chapterList.children.find(b=>b.dataset.chapter==='preflight').click({detail:1});finishAssessment(h);assert.equal(Object.keys(JSON.parse(storage[logic.ASSESSMENT_STORAGE_KEY]).records).length,2);
   });
-  test('Unsafe priority choices cannot earn stars; prompted retry preserves the scored first decision',()=>{
+  test('Unsafe priority choices cannot earn stars; feedback preserves the scored first decision',()=>{
     const h=harness(logic,{chapterId:'boarding',contextual:true}),s=finishAssessment(h,{wrong:{priority:'cross'}});
     assert(h.ids.resultStars.textContent.includes('0 / 3'));assert.equal(h.storage[logic.ASSESSMENT_STORAGE_KEY],undefined);
-    const first=copy(s.judgments),trigger=h.ids.retryTaskList.children[0];trigger.click({detail:1});assert(h.ids.retryEvidence.hidden);
-    const good=s.judgments.find(j=>j.taskId==='priority').retryDecision.choices.findIndex(c=>c.good);h.tap(`Digit${good+1}`);h.ids.retryReturn.click({detail:1});
+    const wrongCard=h.ids.trainingFeedbackList.children.find(card=>card.dataset.status==='improve');assert.deepEqual(wrongCard.children.slice(1).map(line=>line.children[0].textContent),['情境：','選擇做法：','正確做法：','講解：']);
+    const first=copy(s.judgments);h.api.refresh(true);
     assert.deepEqual(copy(s.judgments),first);assert(h.ids.resultStars.textContent.includes('0 / 3'));assert.equal(h.storage[logic.ASSESSMENT_STORAGE_KEY],undefined);
   });
   test('Practice completion and corrections preserve old scores, exam scores and collections',()=>{
@@ -129,54 +130,6 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
       assert(h.ids.resultStars.textContent.includes('3 / 3'));assert.equal(h.storage[logic.ASSESSMENT_STORAGE_KEY],before);assert(/無法儲存/.test(h.ids.bestRecord.textContent));
     }
   });
-  function retryResult({practice=false,chapterId='preflight'}={}){
-    const h=harness(logic,{contextual:true,chapterId});h.begin(practice);const s=h.state();
-    if(s.lesson)h.dismiss();
-    const task=s.tasks.find(t=>t.id===(chapterId==='boarding'?'guide':'belt'));
-    if(chapterId==='preflight'){s.characterMemory={elder:{helped:true}};task.variant=0;}
-    s.player.z=task.z-.8;logic.interact(s);h.api.refresh(true);h.choice(c=>!c.good);
-    if(!s.recovery.ready)h.step(130);h.ids.recoveryContinue.click({detail:1});h.choice(c=>c.good);h.step(180);
-    s.status='finished';s.endReason='timeout';s.grade='incomplete';h.api.refresh(true);return h;
-  }
-  test('Targeted retry preserves the finished chapter, scores and all storage while comparing two attempts',()=>{
-    const h=retryResult(),before=copy(h.state()),storage=copy(h.storage);assert.equal(h.ids.retryTaskList.children.length,1);
-    const trigger=h.ids.retryTaskList.children[0];assert.equal(trigger.dataset.complete,'false');assert(trigger.children[2].hidden);trigger.click({detail:1});assert(!h.ids.retryOverlay.hidden);assert(h.ids.resultOverlay.inert);assert.equal(h.document.activeElement,h.ids.retryTitle);
-    assert.equal(h.ids.retryTitle.textContent,'旅客正在看手機，安全帶尚未扣好，你會如何提醒？');assert.equal(h.ids.retryQuote.textContent,'旅客：「嗯？你剛剛說什麼？」');assert(h.state().tasks.find(t=>t.id==='belt').quote.includes('又見面了'));
-    assert.equal(h.ids.retryContext.textContent,h.state().judgments[0].retryDecision.description);
-    const good=h.state().judgments[0].retryDecision.choices.findIndex(c=>c.good),wrong=h.state().judgments[0].retryDecision.choices.findIndex(c=>!c.good);
-    h.tap(`Digit${wrong+1}`);assert(!h.ids.retryFeedback.hidden);assert(h.ids.retryComparison.hidden);assert.equal(h.document.activeElement,h.ids.retryFeedback);
-    h.tap(`Digit${good+1}`);assert(!h.ids.retryComparison.hidden);assert(h.ids.retryQuestion.hidden);assert(h.ids.retryBefore.textContent.includes('1 次'));assert(h.ids.retryAfter.textContent.includes('1 次後答對'));
-    h.ids.retryAgain.click({detail:1});assert(h.ids.retryComparison.hidden);h.tap(`Numpad${good+1}`);assert.equal(h.ids.retryAfter.textContent,'這次第一次就答對');
-    h.ids.retryReturn.click({detail:1});assert(h.ids.retryOverlay.hidden);assert(!h.ids.resultOverlay.inert);assert.equal(h.document.activeElement,trigger);assert(trigger.children[1].textContent.includes('這次選錯 0 次'));assert.equal(trigger.dataset.complete,'true');assert(!trigger.children[2].hidden);assert.equal(trigger.children[2].children[0].textContent,'✓');assert.equal(trigger.children[2].children[1].textContent,'已完成');
-    trigger.click({detail:1});h.tap('Escape');assert.equal(trigger.dataset.complete,'true','completed retry remains marked when a later retry is cancelled');
-    assert.deepEqual(copy(h.state()),before);assert.deepEqual(copy(h.storage),storage);
-  });
-
-  test('Retry blocks inherited Enter and repeated digits, traps focus and closes with Escape',()=>{
-    const h=retryResult({practice:true}),trigger=h.ids.retryTaskList.children[0];h.key('Enter');trigger.click({detail:0});
-    h.ids.retryChoices.children[0].click({detail:0});assert(h.ids.retryFeedback.hidden);h.key('Enter','Enter',{repeat:true});assert(h.ids.retryFeedback.hidden);h.up('Enter');
-    assert.equal(h.tap('PageDown').prevented,0,'reading keys keep native modal scrolling');h.tap('Tab');assert.equal(h.document.activeElement,h.ids.closeRetry);h.key('Tab','Tab',{shiftKey:true});h.up('Tab');assert.equal(h.document.activeElement,h.ids.retryChoices.children.at(-1));
-    const wrong=h.state().judgments[0].retryDecision.choices.findIndex(c=>!c.good);h.key(`Digit${wrong+1}`);h.key(`Digit${wrong+1}`,'',{repeat:true});h.up(`Digit${wrong+1}`);
-    const good=h.state().judgments[0].retryDecision.choices.findIndex(c=>c.good);h.tap(`Digit${good+1}`);assert(h.ids.retryAfter.textContent.includes('1 次後答對'));
-    h.ids.retryReturn.click({detail:0});assert(!h.ids.retryOverlay.hidden,'answer key release cannot click through to return');
-    h.key('Enter');h.ids.retryReturn.click({detail:0});h.key('Enter','Enter',{repeat:true});trigger.click({detail:0});assert(h.ids.retryOverlay.hidden);h.up('Enter');
-    trigger.click({detail:1});h.tap('Escape');assert(h.ids.retryOverlay.hidden);assert.equal(h.document.activeElement,trigger);
-  });
-
-  test('Boarding retry displays the original graphic clues and can cancel without marking completion',()=>{
-    const h=retryResult({chapterId:'boarding'}),trigger=h.ids.retryTaskList.children[0],before=copy(h.state());trigger.click({detail:1});
-    assert(!h.ids.retryEvidence.hidden);assert.equal(h.ids.retryEvidence.children.length,2);assert(!h.ids.retryReference.hidden);
-    h.visibility(true);h.step(100);h.visibility(false);assert.deepEqual(copy(h.state()),before);
-    h.tap('Escape');assert(!trigger.children[1].textContent.includes('重練完成'));assert.equal(trigger.dataset.complete,'false');assert(trigger.children[2].hidden);assert.deepEqual(copy(h.state()),before);
-    trigger.click({detail:1});h.api.fail(Error('test context loss'));assert(h.ids.retryOverlay.hidden);assert(!h.ids.resultOverlay.inert);
-  });
-
-  test('Clean results have no retry tasks and a fresh run clears old retry completions',()=>{
-    const h=retryResult({practice:true});h.ids.retryTaskList.children[0].click({detail:1});const good=h.state().judgments[0].retryDecision.choices.findIndex(c=>c.good);h.tap(`Digit${good+1}`);h.ids.retryReturn.click({detail:1});assert.equal(h.ids.retryTaskList.children[0].dataset.complete,'true');h.ids.replayButton.click({detail:1});
-    const s=h.state();s.status='finished';s.endReason='timeout';s.grade='incomplete';h.api.refresh(true);
-    assert.equal(h.ids.retryTaskList.children.length,0);assert(h.ids.retryPracticeHint.textContent.includes('沒有選錯'));assert(h.ids.retryOverlay.hidden);
-  });
-
   test('Result feedback describes corrections and missing service records, and resets per run',()=>{
     const h=harness(logic,{contextual:true});h.open(true);h.choice(c=>!c.good);h.ids.recoveryContinue.click({detail:1});h.choice(c=>c.good);h.step(180);
     const s=h.state();assert(s.tasks.find(t=>t.id==='belt').done);s.status='finished';s.endReason='timeout';s.grade='incomplete';h.api.refresh(true);

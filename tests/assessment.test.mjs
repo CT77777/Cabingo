@@ -3,7 +3,6 @@ import * as game from '../public/preflight.mjs';
 import {assessmentDecision,assessmentSummary,assessmentFeedback} from '../public/assessment.mjs';
 import {summarizeResult} from '../public/results.mjs';
 import {awardChapterCards,parseCodex} from '../public/learning.mjs';
-import {retryCandidates,createRetry,answerRetry} from '../public/retry.mjs';
 
 const fresh=(seed,chapterId='preflight')=>{const s=game.createState({chapterId,assessment:true,contextual:true,handsOn:true,seed});game.start(s);return s;};
 function open(s,t){s.player.x=0;s.player.z=t.z-.8;assert(game.interact(s));assert.equal(s.dialog.id,t.id);}
@@ -44,9 +43,9 @@ for(const chapterId of ['boarding','preflight'])for(let seed=1;seed<=12;seed++)f
   assert.equal(assessmentFeedback(s).length,chapterId==='boarding'?5:6);assert.equal(summary.stars,wrong?0:3);assert.equal(!!summary.record,!wrong);
   if(wrong){
     assert(summary.title.includes('安全判斷需要再練習'));
-    const before=JSON.stringify(s),retry=createRetry(retryCandidates(s)[0]);
-    answerRetry(retry,retry.decision.choices.findIndex(c=>c.good));assert(retry.complete);
-    assert.equal(JSON.stringify(s),before,'prompted correction must not change first decisions');
+    const before=JSON.stringify(s);assessmentFeedback(s);
+    assert.equal(JSON.stringify(s),before,'reviewing feedback preserves first decisions');
+    assert(s.judgments.every(j=>!Object.hasOwn(j,'retryDecision')));
   }
 }
 assert.equal(correctPositions.size,3,'answer position varies');
@@ -66,7 +65,7 @@ assert.equal(correctPositions.size,3,'answer position varies');
   assert.equal(s.endReason,'timeout');assert.equal(s.dialog,null);assert(!game.choose(s,0));
   assert(!assessmentSummary(s).submitted);assert(assessmentFeedback(s).every(r=>r.status==='unobserved'));
 }
-console.log('PASS assessment: 9 safety variants, 48 complete runs across both chapters, locked first choices, neutral presentation, safety isolation, retry/reward isolation, timed decisions and timeout');
+console.log('PASS assessment: 9 safety variants, 48 complete runs across both chapters, locked first choices, neutral presentation, safety isolation, feedback/reward isolation, timed decisions and timeout');
 
 // Safety errors include unsafe service/priority choices, while ordinary service omissions remain separately graded.
 for(const chapterId of ['boarding','preflight'])for(const wrongIds of [[],['priority'],['bag'],[chapterId==='boarding'?'guide':'water'],chapterId==='boarding'?['guide','family']:['water','blanket']]){

@@ -86,10 +86,12 @@ export function assessmentSummary(state) {
 
 export function assessmentFeedback(state) {
   return (state.tasks||[]).map(t=>{
-    const j=state.judgments.find(j=>j.taskId===t.id),first=j?.firstChoice;
-    return {id:t.id,title:assessmentDecision(t,state.chapterId).title,status:!j?'unobserved':first.good?'good':'improve',
-      evidence:j?`首次選擇：${first.label}。${first.good?'首次答對':'首次選錯'}；本次未提供提示或補救。`:'尚未作答，不能視為答對。',
-      impact:j?`${j.context} ${j.feedback}`:assessmentDecision(t,state.chapterId).description,
-      advice:j&&!first.good?'可在下方重練原題；提示後答對不會改寫這次首次作答結果。':'再用其他情境練習確認；本次結果不代表通過正式考核。'};
+    const decision=assessmentDecision(t,state.chapterId),correct=decision.choices.filter(c=>c.good);
+    const judgment=state.judgments.find(j=>j.taskId===t.id),first=judgment?.firstChoice;
+    return {id:t.id,title:decision.title,status:!first?'unobserved':first.good?'good':'improve',
+      context:judgment?.context||decision.description,
+      firstChoice:first?.label||'尚未作答',
+      correctAction:correct.map(c=>c.label).join('；或'),
+      reason:correct[0].feedback};
   });
 }
