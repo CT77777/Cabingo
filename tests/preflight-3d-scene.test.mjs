@@ -77,7 +77,7 @@ try {
       assert.equal(typeof label.id,'string');assert.equal(typeof label.text,'string');assert.equal(typeof label.visible,'boolean');assert.equal(typeof label.near,'boolean');assert(Number.isFinite(label.x)&&Number.isFinite(label.y));
     }
     const ring=object('interaction-radius-1.1');assert.equal(ring.geometry.parameters.outerRadius,1.1);approx(ring.scale.x,1);approx(ring.position.x,0);approx(ring.position.z,z);
-    let rings=0;lastScene.traverse(o=>{if(o.geometry?.type==='RingGeometry')rings++;});assert.equal(rings,2,'one interaction ring plus distinct escort beacon');assert.equal(object('escort-beacon').visible,false);
+    let rings=0;lastScene.traverse(o=>{if(o.geometry?.type==='RingGeometry')rings++;});assert.equal(rings,1,'only the interaction ring remains');assert(!lastScene.getObjectByName('escort-beacon'),'no destination beacon');
     const bagGroup=object('objective-bag');if(previousBagGroup)assert.equal(previousBagGroup.parent,null,'old variant/row detached');previousBagGroup=bagGroup;
     lastScene.updateMatrixWorld(true);
     for(const name of ['available-bin','full-bin']){const bin=bagGroup.getObjectByName(name);if(bin){const bounds=new Box3().setFromObject(bin);assert(bounds.min.x>=-3.1&&bounds.max.x<=3.1,'bin and open door stay inside cabin');}}
@@ -125,8 +125,10 @@ try {
   const s=makeState();view.render(s,.016);assert(lastScene.children.filter(o=>o.isLight).length>=3,'lit scene');
   s.action={kind:'clear-hazard',taskId:'water',hazardId:'hazard-water',time:0,duration:5};
   assert.equal(view.render(s,.016).selectedId,'hazard-water');approx(object('interaction-radius-1.1').position.z,4.2);
-  s.player.z=3.4;for(let i=0;i<60;i++)view.render(s,.016);s.action.escort={goal:{x:.43,z:3.4},walked:0,initialDistance:.8};const escortLabels=view.render(s,.016).labels;assert(object('escort-beacon').visible);assert(escortLabels.some(l=>l.id==='escort-goal'&&l.visible));
-  s.action=null;s.hazards[0].done=true;s.hazards[0].returnedAt=10;s.elapsed=10.3;view.render(s,.016);assert(object('standing-hazard-water').visible);assert(Math.abs(object('standing-hazard-water').position.x)>.1);s.elapsed=11;view.render(s,.016);assert.equal(object('standing-hazard-water').visible,false);
+  s.player.z=3.4;s.action.duration=2;s.action.time=0;view.render(s,.016);const standing=object('standing-hazard-water'),origin=standing.position.clone();
+  s.action.time=1.3;const returnLabels=view.render(s,.016).labels;assert(Math.abs(standing.position.x-origin.x)>.1,'passenger moves toward seat during automatic action');assert(!returnLabels.some(l=>l.id==='escort-goal'),'no destination label');
+  s.status='paused';const halfway=standing.position.clone();view.render(s,1);assert(standing.position.equals(halfway),'return animation freezes on pause');s.status='playing';
+  s.action=null;s.hazards[0].done=true;s.hazards[0].returnedAt=10;s.elapsed=10;view.render(s,.016);assert.equal(standing.visible,false,'standing passenger removed on completion');
   // Freeze walking pose even if a caller accidentally changes its step counter.
   s.player.walking=true;s.player.step=1;view.render(s,.016);
   const crew=object('player'),body=crew.children[0],bodyY=body.position.y;
@@ -160,10 +162,20 @@ try {
   view.render(closeup,.016);const fadeMaterial=object('available-bin').children.find(o=>o.material).material;assert(fadeMaterial.version>0,'fade invalidates opaque shader');const fadeVersion=fadeMaterial.version;view.render(closeup,.016);assert.equal(fadeMaterial.version,fadeVersion,'do not invalidate shader every frame');assert(object('available-bin').children.some(o=>o.material?.opacity<1),'bin fades in safety closeup');
   view.render(makeState(),.016);assert(object('available-bin').children.filter(o=>o.material).every(o=>o.material.opacity===1),'bin opacity restores after closeup');
   const deliveryState=makeState();deliveryState.action={id:77,kind:'task',taskId:'water',time:4,duration:8,choice:{id:'serve'}};
-  deliveryState.action.time=0;view.render(deliveryState,.016);assert(object('service-trolley').visible);assert(object('galley-supply').visible);const initialCup=object('delivery-water');approx(initialCup.position.x,object('service-trolley').position.x,'item begins at trolley');approx(initialCup.position.z,object('service-trolley').position.z,'item begins inside source beside player');deliveryState.action.time=4;
+  deliveryState.action.time=0;view.render(deliveryState,.016);assert(!lastScene.getObjectByName('service-trolley'),'following cart removed from scene');assert(object('service-tray').visible);assert(object('galley-supply').visible);
+  for(const id of ['water','blanket'])for(const side of ['left','right'])for(const reducedMotion of [false,true]){
+    const serving=makeState(),task=serving.tasks.find(t=>t.id===id);task.side=side;serving.reducedMotion=reducedMotion;
+    serving.player.angle=Math.PI;serving.action={id:78,kind:'task',taskId:id,time:0,duration:8,choice:{id:'serve'}};
+    view.render(serving,.016);lastScene.updateMatrixWorld(true);
+    const tray=object('service-tray'),origin=tray.getWorldPosition(new Vector3()),item=object(`delivery-${id}`);
+    assert(tray.visible);approx(item.position.x,origin.x,'item starts on tray after facing the passenger');approx(item.position.z,origin.z,'item source follows crew rotation');approx(item.position.y,origin.y+.12,'item rests above tray');
+    assert(tray.parent===object('player').children[0],'tray is held by player body');
+    serving.status='paused';view.render(serving,1);lastScene.updateMatrixWorld(true);assert(tray.getWorldPosition(new Vector3()).equals(origin),'held tray freezes on pause');
+  }
+  view.render(deliveryState,.016);deliveryState.action.time=4;
   view.render(deliveryState,.016);const cup=object('delivery-water');assert(cup.visible);const cupAt=cup.position.clone();
   deliveryState.status='paused';view.render(deliveryState,1);assert(cup.position.equals(cupAt));
-  deliveryState.status='playing';deliveryState.action=null;deliveryState.tasks.find(t=>t.id==='water').done=true;view.render(deliveryState,.016);assert(cup.visible);approx(cup.position.x,1.25);
+  deliveryState.status='playing';deliveryState.action=null;deliveryState.tasks.find(t=>t.id==='water').done=true;view.render(deliveryState,.016);assert(cup.visible);approx(cup.position.x,1.25);assert(!object('service-tray').visible,'tray hidden after service');
   const colleagueState=makeState();colleagueState.elapsed=4;colleagueState.handoffJob={taskId:'water',remaining:7};
   view.render(colleagueState,.016);const colleague=object('coworker'),at=colleague.position.clone();assert(at.z>.7&&at.z<2.4);assert(object('delivery-water').visible);
   colleagueState.status='paused';view.render(colleagueState,1);assert(colleague.position.equals(at));
@@ -172,14 +184,14 @@ try {
   colleagueState.elapsed=22;assert(!view.render(colleagueState,.016).labels.some(l=>l.id==='coworker'),'settled colleague does not block report labels');
   const engine=await import(pathToFileURL(path.join(root,'public/preflight.mjs')));
   const boarding=engine.createState({chapterId:'boarding',seed:7,contextual:true});engine.start(boarding);boarding.renderTargets=engine.targets(boarding);view.render(boarding,.016);
-  for(const status of ['briefing','playing','paused','finished']){view.render({...boarding,status},.016);assert.equal(object('service-trolley').visible,false,`boarding ${status} has no trolley`);assert.equal(object('galley-supply').visible,false,`boarding ${status} has no loose service cart`);}view.render(boarding,.016);
+  for(const status of ['briefing','playing','paused','finished']){view.render({...boarding,status},.016);assert.equal(object('service-tray').visible,false,`boarding ${status} has no service tray`);assert.equal(object('galley-supply').visible,false,`boarding ${status} has no loose service cart`);}view.render(boarding,.016);
   const walker=object('boarding-walking-elder');assert(walker.visible);approx(walker.position.z,3);assert(!object('returning-elder').visible);
   boarding.player.z=2;engine.interact(boarding);const visibleClues=view.render(boarding,.016).labels;assert(!visibleClues.some(l=>l.id.startsWith('boarding-pass-')),'visual evidence panel replaces floating prose');
   boarding.events.push({seq:boarding.eventSeq+1,type:'correct',taskId:'guide'});view.render(boarding,.016);const thanks=view.render(boarding,.2);assert(thanks.labels.some(l=>l.id==='guide'&&l.text==='謝謝你！'));const happyCorner=walker.getObjectByName('mouth-corner-1');assert(happyCorner,'boarding model exposes smile mesh');assert(happyCorner.position.y>-.08,'correct response immediately smiles');const happyHead=walker.getObjectByName('head').rotation.x;boarding.status='paused';view.render(boarding,1);approx(walker.getObjectByName('head').rotation.x,happyHead,'happy gesture freezes on pause');boarding.status='playing';
   const frozenBoarding=JSON.stringify(boarding.boarding);view.render(boarding,1);assert.equal(JSON.stringify(boarding.boarding),frozenBoarding,'scene never moves rules actors');
   engine.closeDialog(boarding);const guide=boarding.tasks.find(t=>t.id==='guide');guide.done=true;const elder=boarding.boarding.actors[0];elder.status='seated';elder.x=1.25;elder.z=7;
   view.render(boarding,.016);assert(!walker.visible);assert(object('boarding-seated-elder').visible);assert(object('boarding-seated-elder').getObjectByName('mouth-corner-1').position.y>-.08,'happy expression survives seating');
-  const next=engine.createState({characterMemory:{elder:{helped:true,mistakes:0}}});next.renderTargets=engine.targets(next);view.render(next,.016);assert(object('returning-elder').visible);assert(!object('boarding-seated-elder').visible);assert(object('service-trolley').visible,'preflight restores service trolley');assert(object('galley-supply').visible,'preflight restores supply source');
+  const next=engine.createState({characterMemory:{elder:{helped:true,mistakes:0}}});next.renderTargets=engine.targets(next);view.render(next,.016);assert(object('returning-elder').visible);assert(!object('boarding-seated-elder').visible);assert(!object('service-tray').visible,'idle crew has no service prop');assert(object('galley-supply').visible,'preflight restores supply source');
   // The fixed elder appearance uses the full shared idle/reaction animation path.
   engine.start(next);view.render(next,.016);const elderHead=object('returning-elder').getObjectByName('head'),baselineHead=elderHead.rotation.x;
   const beltTask=next.tasks.find(t=>t.id==='belt');beltTask.done=true;next.events.push({seq:++next.eventSeq,type:'complete',taskId:beltTask.id});

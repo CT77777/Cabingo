@@ -211,13 +211,14 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
       h.key(code);h.ids.demoHandoff.click({detail:0});h.up(code);assert(h.ids.demoSafety.disabled,'completed safety step stays complete');assert.equal(h.document.activeElement,h.ids.lessonContinue);assert(!h.document.activeElement.disabled);
     }
   });
-  test('Escort accepts real direction keys, hides loading and can cancel from pause without clearing the hazard',()=>{
-    for(const cancel of [true,false]){
-      const h=harness(logic,{contextual:true});h.begin(true);const s=h.state(),t=s.tasks.find(t=>t.id==='water');s.lessonSeen=['aisle','serviceIntro'];s.tasks.forEach(t=>t.patience=999);s.hazards=[{id:'hazard-water',taskId:t.id,row:t.row,x:0,z:t.z,done:false}];s.player.x=0;s.player.z=t.z-.9;h.step();h.tap('Space');assert(s.action.escort);assert(h.ids.actionBox.hidden);assert(h.ids.interactButton.hidden);
-      h.step(100);assert(!s.hazards[0].done);
-      if(cancel){h.tap('Escape');assert(!h.ids.cancelEscortButton.hidden);h.ids.cancelEscortButton.click({detail:1});assert.equal(s.action,null);assert(!s.hazards[0].done);assert.equal(h.document.activeElement,h.ids.resumeButton);continue;}
-      const goal=s.action.escort.goal;let guard=0;while(s.action&&guard++<200){const dx=goal.x-s.player.x,dz=goal.z-s.player.z;const x=dx>.03?'ArrowLeft':dx<-.03?'ArrowRight':null,z=dz>.03?'ArrowUp':dz<-.03?'ArrowDown':null;if(x)h.key(x);if(z)h.key(z);h.step();if(x)h.up(x);if(z)h.up(z);}
-      assert(guard<200);assert(s.hazards[0].done);assert.equal(s.tasks.find(t=>t.id==='water').done,false);
+  test('One interaction returns aisle passenger automatically; pause freezes progress and original service remains',()=>{
+    for(const input of ['keyboard','pointer']){
+      const h=harness(logic,{contextual:true});h.begin(true);const s=h.state(),t=s.tasks.find(t=>t.id==='water');s.lessonSeen=['aisle','serviceIntro'];s.tasks.forEach(t=>t.patience=999);s.hazards=[{id:'hazard-water',taskId:t.id,row:t.row,x:0,z:t.z,done:false}];s.player.x=0;s.player.z=t.z-.9;h.step();
+      if(input==='keyboard')h.tap('Space');else h.ids.interactButton.click({detail:1});
+      assert.equal(s.action.kind,'clear-hazard');assert(!s.action.escort);assert(h.ids.actionBox.hidden);assert(h.ids.interactButton.hidden);assert(h.ids.aisleAlertDirection.textContent.includes('正在引導旅客回座'));
+      const start={x:s.player.x,z:s.player.z};h.key('ArrowUp');h.step(10);h.up('ArrowUp');assert.deepEqual({x:s.player.x,z:s.player.z},start);assert(!s.hazards[0].done);
+      h.tap('Escape');const progress=s.action.time;h.step(100);assert.equal(s.action.time,progress);assert(!s.hazards[0].done);
+      h.ids.resumeButton.click({detail:1});h.step(150);assert.equal(s.action,null);assert(s.hazards[0].done);assert.equal(s.tasks.find(t=>t.id==='water').done,false);assert.equal(s.hazardsCleared,1);
     }
   });
   test('Guided boarding requires deliberate observation and keeps a single live objective',()=>{

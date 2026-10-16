@@ -20,7 +20,6 @@ export function readEvents(s,cursor) {
 }
 function actionSteps(a) {
   const tap=label=>({label,mode:'tap'}),hold=label=>({label,mode:'hold'});
-  if(a.kind==='clear-hazard')return [tap('招呼旅客'),hold('引導旅客返回座位')];
   if(a.kind==='handoff')return [tap('呼叫同事'),tap('確認交接內容')];
   if(a.kind==='wait')return [tap('向旅客說明等候安排')];
   const id=a.choice?.id;
@@ -34,7 +33,7 @@ function actionSteps(a) {
 }
 function beginAction(s, action) { s.action={...action,id:++s.actionSerial};
  if(s.contextual&&action.kind!=='correction')s.action.duration=action.kind==='clear-hazard'||action.taskId==='bag'&&action.choice?.id!=='check'?2:action.choice?.id==='check'||action.kind==='wait'?.8:action.kind==='handoff'?1:action.choice?.id==='serve'?3:1.5;
- if(s.handsOn&&!s.contextual&&action.kind!=='correction')s.action.interaction={steps:actionSteps(action),index:0,held:false,fill:0,retry:false};emit(s,"action-start",action.taskId,{choiceId:action.choice?.id,kind:action.kind}); }
+ if(s.handsOn&&!s.contextual&&!['correction','clear-hazard'].includes(action.kind))s.action.interaction={steps:actionSteps(action),index:0,held:false,fill:0,retry:false};emit(s,"action-start",action.taskId,{choiceId:action.choice?.id,kind:action.kind}); }
 const EPSILON = 1e-9;
 const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
 function rng(seed) {
@@ -165,7 +164,7 @@ export function canStand(s, x, z) {
   return true;
 }
 export function move(s, dx, dz, dt) {
-  if (s.status !== 'playing' || s.dialog || s.lesson || s.recovery || s.action&&!s.action.escort || !Number.isFinite(dt) || dt <= 0) { s.player.walking = false; return false; }
+  if (s.status !== 'playing' || s.dialog || s.lesson || s.recovery || s.action || !Number.isFinite(dt) || dt <= 0) { s.player.walking = false; return false; }
   dx = Number.isFinite(dx) ? dx : 0; dz = Number.isFinite(dz) ? dz : 0;
   if (!dx && !dz) { s.player.walking = false; return false; }
   dt = Math.min(dt, .1);
@@ -241,7 +240,6 @@ export function interact(s) {
   const hazard = s.hazards.find(h => h.id === s.near && !h.done);
   if (hazard) {
     beginAction(s, { kind: 'clear-hazard', taskId: hazard.taskId, hazardId: hazard.id, time: 0, duration: 5, choice: null });
-    if(s.contextual){const goal=escortGoal(s,hazard);if(goal)s.action.escort={goal,walked:0,initialDistance:Math.hypot(goal.x-s.player.x,goal.z-s.player.z)};}
     s.player.walking = false; feedback(s, `走道旅客 · 協助旅客返回座位，恢復走道。`); return true;
   }
   if (s.near === 'report') {
@@ -423,15 +421,10 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
     }
   }
   if (s.action) {
-    if(s.action.escort){
-      const a=s.action,old={x:s.player.x,z:s.player.z};move(s,input?.x,input?.z,dt);a.escort.walked+=Math.hypot(s.player.x-old.x,s.player.z-old.z);
-      const h=s.hazards.find(h=>h.id===a.hazardId),goal=a.escort.goal;
-      if(!h||Math.hypot(s.player.x-h.x,s.player.z-h.z)>2.1||!canStand(s,goal.x,goal.z))cancelEscort(s);
-      else if(a.escort.walked>=.4&&Math.hypot(s.player.x-goal.x,s.player.z-goal.z)<=.22)finishAction(s);
-    }else{ s.player.walking = false;
+    s.player.walking = false;
     if(s.action.interaction){const i=s.action.interaction;if(i.held){i.fill=Math.min(1.2,i.fill+dt);updateActionProgress(s.action);}}
     else {s.action.time = Math.min(s.action.duration, s.action.time + dt);
-    if (s.action.duration - s.action.time <= EPSILON) { s.action.time = s.action.duration; finishAction(s); }}}
+    if (s.action.duration - s.action.time <= EPSILON) { s.action.time = s.action.duration; finishAction(s); }}
   } else move(s, input?.x, input?.z, dt);
   for (const h of s.hazards) {
     if (h.collisionPending && !rectBlocked(s.player.x, s.player.z, -.38, .38, h.z - .34, h.z + .34)) h.collisionPending = false;
@@ -443,19 +436,4 @@ export function tick(s, dt, input = { x: 0, z: 0 }) {
 export function ackRecovery(s){
  if(s.status!=='playing'||!s.recovery?.ready)return false;
  const decision=s.recovery.decision;s.recovery=null;s.dialog=decision;s.player.walking=false;if(s.pendingAisleLesson){s.pendingAisleLesson=false;showLesson(s,'aisle');}return true;
-}
-
-function escortGoal(s,h){
- const task=s.tasks.find(t=>t.id===h.taskId),side=task?.side==='right'?1:-1,approach=s.player.z<h.z?-1:s.player.z>h.z?1:h.z>8?-1:1;
- for(const d of [.72,.97,1.22,1.47,1.67])for(const x of [side*.43,side*.30,-side*.43,side*.55,-side*.55]){
-  const z=h.z+approach*d;if(Math.hypot(x-s.player.x,z-s.player.z)<.6||!canStand(s,x,z))continue;
-  let clear=true;for(let n=1;n<=32;n++){const q=n/32;if(!canStand(s,s.player.x+(x-s.player.x)*q,s.player.z+(z-s.player.z)*q)){clear=false;break;}}
-  if(clear)return {x,z};
- }
- // Very constrained geometry uses a short return-to-seat cue, never a trapped goal.
- return null;
-}
-export function cancelEscort(s){
- if(!['playing','paused'].includes(s.status)||!s.action?.escort)return false;
- const taskId=s.action.taskId;s.action=null;s.player.walking=false;emit(s,'escort-cancel',taskId);feedback(s,'暫停引導，旅客仍在原處。靠近後可重新招呼。');return true;
 }

@@ -1,6 +1,6 @@
 import {boardingTaskActor} from './boarding.mjs?v=0.7.2';
 import * as THREE from './vendor/three.module.min.js';
-import {passengerPose,actionPose,serviceItemPose,trolleyPresentation,GALLEY_SUPPLY,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.7.2';
+import {passengerPose,actionPose,serviceItemPose,serviceTrayPresentation,SERVICE_TRAY,GALLEY_SUPPLY,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=service-tray-1';
 
 
 // Gameplay and scene share x/z coordinates. Both cameras face +z along the
@@ -206,15 +206,11 @@ export function createCabinView(canvas, { onContextLost } = {}) {
   }
   staticBatches.clear();
 
-  // Visible sources exist before an action: a service trolley and front galley drawer.
-  const trolley=group();trolley.name='service-trolley';
-  box('mint',[0,.66,0],[.42,.8,.5],[0,0,0],trolley);box('cream',[0,1.08,0],[.46,.08,.55],[0,0,0],trolley);
-  for(const x of [-.15,.15])cylinder('deep',[x,.22,0],[.07,.08,.07],[Math.PI/2,0,0],trolley);
-  const trolleyLid=group(trolley);trolleyLid.position.set(0,1.13,.24);box('navy',[0,0,-.24],[.43,.04,.5],[0,0,0],trolleyLid);
+  // Colleagues collect supplies from the fixed front galley.
   const galleyDrawer=group();galleyDrawer.name='galley-supply';galleyDrawer.position.set(GALLEY_SUPPLY.x-.08,.85,GALLEY_SUPPLY.z);
   box('mint',[.15,-.2,0],[.55,.5,.48],[0,0,0],galleyDrawer);box('cream',[.15,.11,0],[.57,.06,.5],[0,0,0],galleyDrawer);
   const galleyLid=group(galleyDrawer);galleyLid.position.set(.15,.16,.22);box('navy',[0,0,-.22],[.52,.04,.44],[0,0,0],galleyLid);
-  for(const source of [trolley,galleyDrawer]){cylinder('cream',[-.08,source===trolley?1.16:.25,-.02],[.06,.13,.06],[0,0,0],source);box('plum',[.13,source===trolley?1.14:.23,-.04],[.15,.07,.24],[0,0,0],source);}
+  cylinder('cream',[-.08,.25,-.02],[.06,.13,.06],[0,0,0],galleyDrawer);box('plum',[.13,.23,-.04],[.15,.07,.24],[0,0,0],galleyDrawer);
   // The player has articulated limbs, a cap and a scarf, with a compact footprint.
   const crew = group(), crewBody = group(crew); crew.name = 'player';
   primitive(coneGeo, 'navy', [0, .88, 0], [.245, .5, .18], [0,0,0], crewBody);
@@ -239,6 +235,12 @@ export function createCabinView(canvas, { onContextLost } = {}) {
   const colleagueBody=colleague.children[0],colleagueArms=arms.map(arm=>colleagueBody.children[crewBody.children.indexOf(arm)]),colleagueLegs=legs.map(leg=>colleagueBody.children[crewBody.children.indexOf(leg)]);
   const colleagueCup=group(colleagueBody);colleagueCup.name='coworker-water';cylinder('cream',[0,.98,.38],[.07,.15,.07],[0,0,0],colleagueCup);
   const colleagueBlanket=group(colleagueBody);colleagueBlanket.name='coworker-blanket';box('plum',[0,.98,.38],[.34,.10,.24],[0,0,0],colleagueBlanket);
+  // Created after cloning the colleague so only the player carries this tray.
+  const serviceTray=group(crewBody);serviceTray.name='service-tray';
+  serviceTray.position.set(SERVICE_TRAY.x,SERVICE_TRAY.y,SERVICE_TRAY.z);
+  box('navy',[0,0,0],[.48,.035,.44],[0,0,0],serviceTray);
+  for(const x of [-.23,.23])box('gold',[x,.025,0],[.02,.04,.44],[0,0,0],serviceTray);
+  for(const z of [-.21,.21])box('gold',[0,.025,z],[.48,.04,.02],[0,0,0],serviceTray);
   const shadow = new THREE.Mesh(ownGeometry(new THREE.CircleGeometry(.33, 24)), ownMaterial(new THREE.MeshBasicMaterial({ color: '#29483f', opacity: .14, transparent: true, depthWrite: false })));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = .143; scene.add(shadow);
   const ringMaterial = ownMaterial(new THREE.MeshBasicMaterial({ color: '#f6ce78', transparent: true, opacity: .96, side: THREE.DoubleSide, depthWrite: false }));
@@ -369,8 +371,6 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       r.group.position.set(hazard.x || 0,.02,hazard.z || 3); r.group.visible = !hazard.done;
     }
   }
-  const escortBeacon=new THREE.Mesh(ownGeometry(new THREE.RingGeometry(.18,.24,48)),ownMaterial(new THREE.MeshBasicMaterial({color:'#9be4cf',side:THREE.DoubleSide,transparent:true,opacity:.95,depthWrite:false})));
-  escortBeacon.name='escort-beacon';escortBeacon.rotation.x=-Math.PI/2;escortBeacon.visible=false;scene.add(escortBeacon);
   const floorBag = new THREE.Vector3(), liftedBag = new THREE.Vector3(), entryBag = new THREE.Vector3(), stowedBag = new THREE.Vector3();
   function updateTask(record, task, state, selectedId) {
     const activeAction = state.action?.taskId === task.id && ['task','stow'].includes(state.action.kind);
@@ -406,8 +406,9 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     if(record.delivery){
       const self=activeAction&&state.action.choice?.id==='serve';
       const colleagueState=coworkerPresentation(state),delegated=colleagueState.taskId===task.id&&colleagueState.phase==='serving';
-      const hand={x:state.player.x+.22,y:1.13,z:state.player.z+.18},dest={x:record.x,y:1.04,z:record.z-.35};
-      const selfPose=serviceItemPose({source:{...trolleyPresentation(state.player),y:1.16},hand,dest,progress:p});
+      const angle=Math.atan2((task.side==='right'?1:-1)*1.25-state.player.x,task.z-state.player.z);
+      const hand={x:state.player.x+.27*Math.cos(angle)+.39*Math.sin(angle),y:1.18,z:state.player.z-.27*Math.sin(angle)+.39*Math.cos(angle)},dest={x:record.x,y:1.04,z:record.z-.35};
+      const selfPose=serviceItemPose({source:serviceTrayPresentation({...state.player,angle}),hand,dest,progress:p});
       const activeJob=colleagueState.taskId===task.id&&!!state.handoffJob;
       record.delivery.visible=task.done||self||activeJob;
       if(task.done)record.delivery.position.set(dest.x,dest.y,dest.z);
@@ -436,9 +437,10 @@ export function createCabinView(canvas, { onContextLost } = {}) {
   canvas.addEventListener('webglcontextlost',contextLost,false);
   function render(state, dt = 0) {
     if (disposed) return {labels:[]}; resize();
-    // Boarding keeps the aisle clear of the movable service cart and supply cart.
+    // Boarding keeps service props out of the aisle.
     const showServiceProps=!state.boarding&&state.chapterId!=='boarding';
-    trolley.visible=showServiceProps;galleyDrawer.visible=showServiceProps;
+    const selfServing=state.action?.kind==='task'&&state.action.choice?.id==='serve'&&['water','blanket'].includes(state.action.taskId);
+    serviceTray.visible=showServiceProps&&selfServing;galleyDrawer.visible=showServiceProps;
     const player = state.player || {x:0,z:1.5,angle:0,walking:false,step:0};
     const playing = state.status === 'playing' && !state.dialog && !state.lesson, reducedMotion = Boolean(state.reducedMotion);
     for(const halo of halos.values())halo.visible=false;
@@ -459,7 +461,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       const actor=!state.boarding&&task?.characterId==='elder'?returningElder:baseActor;
       if(actor!==baseActor){baseActor.root.visible=false;actor.root.position.copy(baseActor.root.position);}
       const hazard=task&&hazards.find(h=>h.taskId===task.id&&!h.done);
-      const returning=task&&hazards.find(h=>h.taskId===task.id&&h.done&&Number.isFinite(h.returnedAt)&&state.elapsed-h.returnedAt<.6);actor.root.visible=!hazard&&!returning&&(!state.boarding||i===0||i===3);
+      actor.root.visible=!hazard&&(!state.boarding||i===0||i===3);
       const selected=task&&selectedId===task.id;
       const r=task&&reactions.get(task.id), reaction=r?{type:r.type,age:visualTime-r.at}:null;
       const mood=task?.done?'happy':task?.late?'waiting':selected?'curious':Math.sin(visualTime*.35+actor.phase)>.55?'happy':actor.style===1?'curious':'neutral';
@@ -479,14 +481,17 @@ export function createCabinView(canvas, { onContextLost } = {}) {
         h.visible=!!selected||completed;h.position.set(actor.root.position.x,1.7,actor.root.position.z);h.rotation.x=Math.PI/2;
         h.scale.setScalar(completed&&!reducedMotion?1+reaction.age*.2:1);}
     }
-    const escort=state.action?.escort,activeHazard=hazards.find(h=>h.id===state.action?.hazardId);
-    escortBeacon.visible=!!escort&&state.status!=='finished';if(escort)escortBeacon.position.set(escort.goal.x,.16,escort.goal.z);
     for(const h of hazards){const r=hazardRecords.get(h.id);if(!r)continue;
-      const task=tasks.find(t=>t.id===h.taskId),age=Number.isFinite(h.returnedAt)?Math.max(0,state.elapsed-h.returnedAt):Infinity;
-      if(h.done&&age<.6){const q=smooth(age/.6);r.group.visible=true;r.group.position.set((h.x||0)+((task?.side==='right'?1.25:-1.25)-(h.x||0))*q,.02-.5*q,h.z);r.actor.root.rotation.y=0;}
-      else if(!h.done){const dx=player.x-(h.x||0),dz=player.z-h.z,d=Math.hypot(dx,dz),shift=escort&&activeHazard===h?Math.min(.18,Math.max(0,d-.5)):0;
-        r.group.position.set((h.x||0)+(d?dx/d*shift:0),.02,h.z+(d?dz/d*shift:0));r.actor.root.rotation.y=Math.atan2(dx,-dz);r.actor.arms[1].rotation.x=escort&&activeHazard===h?-.6:0;r.actor.brows.forEach((b,i)=>b.rotation.z=(i?1:-1)*.22);
-      }else r.group.visible=false;
+      const task=tasks.find(t=>t.id===h.taskId),clearing=state.action?.kind==='clear-hazard'&&state.action.hazardId===h.id;
+      const progress=clearing?clamp(state.action.time/Math.max(.001,state.action.duration),0,1):0;
+      const returning=smooth((progress-.25)/.75),seatX=task?.side==='right'?1.25:-1.25;
+      r.group.visible=!h.done;
+      if(!h.done){
+        r.group.position.set((h.x||0)+(seatX-(h.x||0))*returning,.02-.5*returning,h.z);
+        r.actor.root.rotation.y=clearing?0:Math.atan2(player.x-(h.x||0),-(player.z-h.z));
+        r.actor.arms[1].rotation.x=clearing?-.6*Math.sin(progress*Math.PI):0;
+        r.actor.brows.forEach((b,i)=>b.rotation.z=(i?1:-1)*.22*(1-returning));
+      }
     }
     for(const pair of boardingActors.values()){pair.standing.root.visible=false;pair.seated.root.visible=false;}
     for(const a of state.boarding?.actors||[]){
@@ -533,12 +538,12 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     colleagueArms[0].rotation.x=colleagueState.carrying?-.8:-stride*.5;colleagueArms[1].rotation.x=colleagueState.carrying?-.8:stride*.5;
     colleagueCup.visible=false;
     colleagueBlanket.visible=false;
-    const cartPose=trolleyPresentation(player);trolley.position.set(cartPose.x,0,cartPose.z);trolley.rotation.y=cartPose.angle;const selfServing=state.action?.kind==='task'&&state.action.choice?.id==='serve';
-    trolleyLid.rotation.x=selfServing?-1.4*serviceItemPose({source:{x:0,y:0,z:0},hand:{x:0,y:0,z:0},dest:{x:0,y:0,z:0},progress}).open:0;
+    if(serviceTray.visible){arms[0].rotation.x=-Math.PI/2;crewBody.position.y=0;}
     galleyLid.rotation.x=colleagueState.phase==='preparing'?-1.4*Math.sin(Math.min(1,colleagueState.progress*6)*Math.PI):0;
+    if(state.action?.kind==='clear-hazard'){const hazard=hazards.find(h=>h.id===state.action.hazardId);if(hazard)crew.rotation.y=Math.atan2((hazard.x||0)-player.x,hazard.z-player.z);arms[1].rotation.x=-.7*Math.sin(progress*Math.PI);}
     if(state.action?.kind==='handoff'){crew.rotation.y=Math.atan2(GALLEY_SUPPLY.x-player.x,GALLEY_SUPPLY.z-player.z);arms[1].rotation.x=-1.9;}
     shadow.position.set(crew.position.x,.143,crew.position.z);
-    ring.visible = Boolean(selected) && state.status !== 'finished'&&!escort;
+    ring.visible = Boolean(selected) && state.status !== 'finished';
     if (selected) {
       ring.position.set(selected.x || 0,.146,selected.z);
       const near = Math.hypot((selected.x||0)-(player.x||0),selected.z-player.z) <= INTERACTION_RADIUS + 1e-8;
@@ -601,7 +606,6 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     }
     const speakerTask=tasks.find(t=>t.id===state.dialog?.id),speakerActor=speakerTask&&(state.boarding?boardingActors.get(boardingTaskActor(state,speakerTask.id)?.id)?.standing:speakerTask.characterId==='elder'?returningElder:passengers.get(`${speakerTask.row}-${speakerTask.side==='right'?2:1}`));
     const speaker=speakerActor?projectGamePoint(camera,{x:speakerActor.root.position.x,y:1.95,z:speakerActor.root.position.z},sizeWidth,sizeHeight):null;
-    if(escort)labels.push({id:'escort-goal',text:'走到這裡',...projectGamePoint(camera,{x:escort.goal.x,y:.35,z:escort.goal.z},sizeWidth,sizeHeight),kind:'detail',near:true,selected:true});
     return {labels,speaker,selectedId:selected?.id || null};
   }
   function dispose() {
