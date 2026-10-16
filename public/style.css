@@ -752,6 +752,18 @@ body[data-panel=result] aside, body[data-panel=result] .control-dock, body[data-
 .result-more { margin-top:12px; border-top:1px solid #b4d8cb33; text-align:left; }
 .result-more>summary { padding:13px 0; min-height:44px; cursor:pointer; color:#c6dcd1; font-size:13px; }
 .result-more .result-advice { margin-top:8px; }
+.training-feedback { margin:20px 0; text-align:left; border-top:1px solid #b4d8cb33; padding-top:16px; }
+.training-feedback h3 { font-size:16px; margin:0 0 6px; }
+.result-card .training-scope { font-size:12px; color:#bbd4cb; line-height:1.6; margin:0 0 12px; }
+.training-feedback-list { display:grid; gap:10px; min-width:0; }
+.training-feedback-item { border:1px solid #b4d8cb33; border-radius:10px; padding:12px 14px; background:#102b3680; overflow-wrap:anywhere; }
+.training-feedback-item h4 { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; font-size:14px; margin:0 0 8px; }
+.training-feedback-status { font-size:11px; color:var(--mint); border:1px solid currentColor; padding:2px 7px; border-radius:20px; }
+.training-feedback-item[data-status=improve] .training-feedback-status { color:#ffbd8d; }
+.training-feedback-item[data-status=unobserved] .training-feedback-status { color:#bbd4cb; }
+.result-card .training-feedback-item p { font-size:13px; line-height:1.7; margin:6px 0 0; color:#c6dcd1; }
+.result-card .training-feedback-item .training-feedback-evidence { color:#f8f5e9; }
+.training-feedback-item p strong { color:#eaf1e9; font-weight:600; }
 .result-card>#resultCodexButton { width:100%; justify-content:center; margin-top:4px; min-height:40px; }
 .result-celebration { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
 .result-celebration i { position:absolute; top:-20px; left:calc(5% + var(--i)*5%); width:8px; height:15px; background:var(--gold); opacity:0; }

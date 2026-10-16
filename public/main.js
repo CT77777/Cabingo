@@ -1,9 +1,9 @@
 import {createBoardingEvidence} from './boarding-ui.mjs?v=0.7.2';
-import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents,actionInput,ackRecovery,cancelEscort} from './preflight.mjs?v=0.7.2';
+import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents,actionInput,ackRecovery,cancelEscort} from './preflight.mjs?v=0.7.3-feedback';
 import {BOARDING_TUTORIAL,boardingEvidence,boardingCoach,inspectBoardingClue} from './boarding.mjs?v=0.7.2';
 import {layoutLabels,crossedMilestones,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.7.2';
 import {createCabinAudio} from './audio.mjs?v=0.7.2';
-import {summarizeResult,parseBest,selectBest} from './results.mjs?v=0.7.2';
+import {summarizeResult,parseBest,selectBest,trainingFeedback} from './results.mjs?v=0.7.3-feedback';
 import {CHAPTERS,DEFAULT_CHAPTER_ID,getChapter,formatChapterLabel} from './chapters/index.mjs?v=0.7.2';
 import {CAMPAIGN_STORAGE_KEY,parseCampaign,recordChapterResult,selectCampaignChapter,updateCharacterMemory,prepareCampaignSave} from './campaign.mjs?v=0.7.2';
 import {joystickVector,countdownPresentation} from './interaction.mjs?v=0.7.2';
@@ -109,6 +109,14 @@ function knowledgeContent(card){
 }
 function renderLearningResult(){
  if(learningResultRun===state.runId)return;learningResultRun=state.runId;$('reviewDetails').open=false;renderCardRewards();
+ text('trainingScope',state.practice?'本次為不計分練習。以下依實際操作提供建議，並非正式考核結果。':'以下依本局操作提供練習建議，包含不計分教學；正式考核標準由訓練單位訂定。');
+ const statusLabels={good:'做得好',improve:'需要改進',unobserved:'尚未評量'};
+ $('trainingFeedbackList').replaceChildren(...trainingFeedback(state).map(item=>{
+  const card=document.createElement('article'),heading=document.createElement('h4'),badge=document.createElement('span'),evidence=document.createElement('p');
+  card.className='training-feedback-item';card.dataset.status=item.status;heading.textContent=item.title;badge.className='training-feedback-status';badge.textContent=statusLabels[item.status];heading.append(badge);evidence.className='training-feedback-evidence';evidence.textContent=item.evidence;card.append(heading,evidence);
+  for(const [label,copy] of [['影響',item.impact],['下次怎麼練',item.advice]]){const line=document.createElement('p'),caption=document.createElement('strong'),body=document.createElement('span');caption.textContent=`${label}：`;body.textContent=copy;line.append(caption,body);card.append(line);}
+  return card;
+ }));
  const rows=resultJudgments(state);text('reviewSummary',`為什麼這樣判斷？ · ${rows.length} 題`);
  $('judgmentList').replaceChildren(...rows.map(j=>{
   const row=document.createElement('details'),summary=document.createElement('summary'),context=document.createElement('p'),choice=document.createElement('p');row.className='judgment';
