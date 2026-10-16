@@ -1,3 +1,4 @@
+// Legacy service-phase engine coverage; final-cabin-check.test.mjs covers the current preflight policy.
 import assert from 'node:assert/strict';
 import * as game from '../public/preflight.mjs';
 const a=game.createState({seed:7}),b=game.createState({seed:7});
@@ -8,7 +9,7 @@ assert(first.events.some(e=>e.type==='demand'&&e.taskId==='water'));
 assert.deepEqual(game.readEvents(a,first.cursor).events,[]);
 assert.equal(game.readEvents(b,first.cursor).cursor.runId,b.runId);
 // Legacy rule fixture: clean dialogue retains handoff timing without repeated tutorial copy.
-const s=game.createState({seed:7,practice:true});game.start(s);
+const s=game.createState({seed:7,practice:true});s.phase='service-training';game.start(s);
 const water=s.tasks.find(t=>t.id==='water');s.player.z=water.z;s.near='water';
 game.interact(s);
 assert.equal(s.dialog.handoffHint,null);assert(s.dialog.choices.some(c=>c.handoff));

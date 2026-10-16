@@ -43,7 +43,7 @@ export function crossedMilestones({actionId,taskId,choiceId,from,to}) {
   return threshold!==null&&from<threshold&&to>=threshold?[{id:`${actionId}:${taskId}`,type:taskId==='water'?'cup':taskId==='belt'?'buckle':'close'}]:[];
 }
 
-export const COWORKER_PHASE_LABELS=Object.freeze({idle:'待命',calling:'聯繫同事',acknowledging:'收到，正在取物',preparing:'從前艙取物',walking:'前往旅客',serving:'正在交付',complete:'已送達',returning:'已送達 · 返回工作位'});
+export const COWORKER_PHASE_LABELS=Object.freeze({idle:'待命',recorded:'需求已記錄',recording:'正在記錄需求',calling:'聯繫同事',acknowledging:'收到，正在取物',preparing:'從前艙取物',walking:'前往旅客',serving:'正在交付',complete:'已送達',returning:'已送達 · 返回工作位'});
 
 // One shared timeline drives the colleague, prop transfer and handoff HUD.
 export function coworkerPresentation(state={}) {
@@ -51,6 +51,7 @@ export function coworkerPresentation(state={}) {
   const task=job?tasks.find(t=>t.id===job.taskId):tasks.find(t=>t.handoff&&t.done);
   const home={x:.53,z:.7};
   if(!task)return {...home,phase:'idle',progress:0,taskId:null,carrying:false,transfer:0,walking:false};
+  if(state.phase==='final-cabin-check')return {...home,phase:task.deferred?'recorded':'recording',progress:task.deferred?1:0,taskId:task.id,carrying:false,transfer:0,walking:false,settled:true};
   const active=!!job,p=active?clamp((12-job.remaining)/12):1,age=active?0:Math.max(0,(state.elapsed||0)-(task.completedAt||0));
   const side=task.side==='right'?1:-1,dest={x:side*.53,z:task.z-.6};
   let phase,x=home.x,z=home.z,walking=false,carrying=false,transfer=0;

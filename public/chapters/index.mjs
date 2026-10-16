@@ -1,4 +1,4 @@
-import {PREFLIGHT_CHAPTER} from './preflight.mjs?v=0.7.2';
+import {PREFLIGHT_CHAPTER} from './preflight.mjs?v=recording-time-1';
 
 import {BOARDING_CHAPTER} from './boarding.mjs?v=0.7.2';
 

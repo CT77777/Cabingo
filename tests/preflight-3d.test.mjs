@@ -20,7 +20,7 @@ const openHazards = s => s.hazards.filter(h=>!h.done);
 const actionKind = s => s.action?.system ?? s.action?.kind;
 const dialogId = s => s.dialog?.taskId ?? s.dialog?.id;
 const choices = s => s.dialog?.choices ?? [];
-const goodSelf = c => c.good && !c.handoff && !c.ack && c.id!=='ask';
+const goodSelf = c => c.good && !c.handoff && c.id!=='ask';
 const stateView = s => ({ status:s.status, elapsed:+s.elapsed.toFixed(6),
   x:+s.player.x.toFixed(6), z:+s.player.z.toFixed(6), action:actionKind(s),
   completed:s.completed, safetyErrors:s.safetyErrors, servicePenalty:s.servicePenalty,
@@ -251,8 +251,8 @@ test('every safety variant states its observable clue and has one appropriate ac
   for(const [id,values]of Object.entries(seen))assert.equal(values.size,3,id);
 });
 test('Departure-time question is removed from the chapter',()=>{assert(!fresh().tasks.some(t=>t.id==='question'));});
-test('reading freezes elapsed, movement, demand timers and all progress',()=>{
-  const s=fresh();openTask(s,'bag');const before=clone(s);
+test('practice reading freezes elapsed, movement, demand timers and all progress',()=>{
+  const s=fresh(7,true);openTask(s,'bag');const before=clone(s);
   advance(s,60,{input:{x:1,z:1},autoLessons:false});assert.deepEqual(s,before);
   move(s,1,1,.1);assert.deepEqual(s,before);assert.equal(interact(s),false);
   assert.equal(closeDialog(s),true);frame(s);assert(s.elapsed>before.elapsed);
@@ -289,7 +289,7 @@ test('explicit pause freezes active actions, lessons, dialog and handoff clocks'
     assert.equal(pause(s),true);const before=clone(s);advance(s,10,{autoLessons:false,input:{x:1,z:1}});
     move(s,1,1,.1);assert.deepEqual(s,before);assert.equal(choose(s,0),false);assert.equal(interact(s),false);
     assert.equal(pause(s),false);assert.equal(resume(s),true);assert.equal(resume(s),false);
-    if(mode==='dialog'||mode==='lesson'){const current=clone(s);frame(s);assert.deepEqual(s,current);}
+    if(mode==='lesson'){const current=clone(s);frame(s);assert.deepEqual(s,current);}
     else {frame(s);assert(s.elapsed>before.elapsed);}
   }
 });
@@ -300,32 +300,26 @@ test('completed safety actions credit once and cannot be repeated',()=>{
   const score=s.safety;advance(s,1);assert.equal(s.completed,1);assert.equal(s.safety,score);
   assert(!targets(s).some(t=>t.id==='bag'));
 });
-test('handoff takes 3 seconds then 12 background seconds and provides reduced credit',()=>{
-  const s=fresh(7);openTask(s,'water');const before=s.comfort;pick(s,c=>c.handoff);
-  assert.equal(s.action.duration,3);assert.equal(s.handoffTokens,1);advance(s,3-DT);assert.equal(task(s,'water').assigned,false);
-  frame(s);assert.equal(s.handoffTokens,0);assert.equal(task(s,'water').assigned,true);assert.equal(task(s,'water').done,false);
-  approx(s.handoffJob.remaining,12);assert.equal(s.lesson,null);
-  advance(s,12-DT);assert.equal(task(s,'water').done,false);frame(s);assert.equal(task(s,'water').done,true);
-  assert.equal(task(s,'water').handoff,true);assert.equal(s.handoffJob,null);assert.equal(s.handoffTokens,0);
-  assert.equal(s.comfort,before+3);
+test('delegated recording completes in 1 second without delivery or reduced credit',()=>{
+ const s=fresh(7);openTask(s,'water');const before=s.comfort;pick(s,c=>c.handoff);
+ assert.equal(s.action.duration,1);advance(s,1-DT);assert(!task(s,'water').done);frame(s);
+ assert(task(s,'water').done&&task(s,'water').deferred&&task(s,'water').handoff);assert.equal(s.handoffJob,null);assert.equal(s.handoffTokens,0);assert.equal(s.comfort,before+8);
 });
-test('dialog reading freezes a pending handoff and unavailable delegation is absent',()=>{
+test('formal dialog keeps counting without restoring unavailable delegation',()=>{
   const s=fresh(7);serve(s,'water','handoff');openTask(s,'blanket');const before=clone(s);
-  advance(s,50,{autoLessons:false});assert.deepEqual(s,before);assert(!choices(s).some(c=>c.handoff));
+  advance(s,1,{autoLessons:false});approx(s.elapsed,before.elapsed+1);assert.deepEqual(s.player,before.player);assert.deepEqual(s.dialog,before.dialog);assert(!choices(s).some(c=>c.handoff));
   assert.equal(s.handoffTokens,0);assert.equal(task(s,'blanket').done,false);assert.equal(s.mistakes,0);
 });
-test('one wait takes 3 seconds, extends patience by 12, and does not complete service',()=>{
-  const s=fresh(7),patience=task(s,'water').patience;openTask(s,'water');pick(s,c=>c.ack);
-  advance(s,3-DT);assert.equal(task(s,'water').acknowledged,false);frame(s);
-  assert.equal(task(s,'water').acknowledged,true);assert.equal(task(s,'water').patience,patience+12);
-  assert.equal(task(s,'water').done,false);assert.equal(interact(s),true);
-  assert(!choices(s).some(c=>c.ack));assert.equal(task(s,'water').patience,patience+12);assert.equal(s.mistakes,0);
+test('recording a deferred request takes 3 seconds and stops patience permanently',()=>{
+ const s=fresh(7),patience=task(s,'water').patience;openTask(s,'water');pick(s,c=>c.ack);
+ advance(s,3-DT);assert(!task(s,'water').done);frame(s);assert(task(s,'water').done&&task(s,'water').deferred);
+ assert.equal(task(s,'water').patience,patience);assert(!targets(s).some(t=>t.id==='water'));advance(s,20);assert(!task(s,'water').late);assert.equal(s.mistakes,0);
 });
 test('personal service with unresolved visible baggage is a retained safety error',()=>{
   // Seed 7 places water before the solid bag, making this mistake physically reachable.
   const s=fresh(7);assert.notEqual(task(s,'bag').variant,2);openTask(s,'water');
   assert.equal(task(s,'bag').done,false);const c=choices(s).find(c=>c.id==='serve');
-  assert.equal(c.good,false);assert.equal(c.safetyError,true);assert.match(s.dialog.description,/行李.*走道/);
+  assert.equal(c.good,false);assert.equal(c.safetyError,true);assert.match(s.dialog.description,/最後安全檢查/);
   pick(s,c=>c.id==='serve');finishAction(s);assert.equal(s.safetyErrors,1);assert.equal(s.safety,80);
   assert.equal(task(s,'water').done,false);assert.equal(task(s,'bag').done,false);
 });
@@ -354,30 +348,26 @@ test('first aisle lesson is remembered and further hazards still accrue conseque
   untilElapsed(s,44-DT);frame(s);assert.equal(s.lesson,null);assert.equal(s.hazards.length,2);
   assert.equal(s.servicePenalty,16);assert.equal(s.lessonSeen.filter(id=>id==='aisle').length,1);
 });
-test('report requires all three safety checks, both services and no open hazards',()=>{
+test('report requires all three safety confirmations and no open hazards',()=>{
   // Isolated prerequisite fixtures validate every finish-gate combination.
-  for(const missing of ['bag','belt','tray','water','blanket','hazard']){
+  for(const missing of ['bag','belt','tray','hazard']){
     const s=fresh();for(const t of s.tasks)t.done=t.id!==missing;
     s.completed=s.tasks.filter(t=>t.done).length;
     if(missing==='hazard')s.hazards.push({id:'hazard-water',taskId:'water',x:0,z:13,done:false});
     assert.equal(chapterReady(s),false);assert.equal(interact(s),false);assert.equal(s.status,'playing');assert.equal(s.reportAttempted,true);
   }
 });
-test('a pending handoff cannot satisfy the finish gate before actual colleague delivery',()=>{
-  const s=fresh(6);
-  for(const t of s.tasks.filter(t=>t.kind==='safety').sort((a,b)=>a.z-b.z)){if(!t.done)serve(s,t.id);}
-  for(const id of ['blanket'])serve(s,id);
-  serve(s,'water','handoff');assert(s.handoffJob);assert.equal(chapterReady(s),false);
-  walkZ(s,WORLD.reportPoint.z);assert(s.handoffJob,'returning must leave colleague work pending in this fixture');
-  assert.equal(interact(s),false);assert.equal(s.status,'playing');
-  advance(s,s.handoffJob.remaining);assert.equal(chapterReady(s),true);assert.equal(interact(s),true);assert.equal(s.status,'finished');
+test('recorded service need not be delivered before the cabin-secure report',()=>{
+ const s=fresh(6);for(const t of s.tasks.filter(t=>t.kind==='safety').sort((a,b)=>a.z-b.z))if(!t.done)serve(s,t.id);
+ serve(s,'water','handoff');assert.equal(s.handoffJob,null);assert(task(s,'water').deferred);assert(chapterReady(s));
+ walkZ(s,WORLD.reportPoint.z);assert(interact(s));assert.equal(s.status,'finished');
 });
 test('hard cutoff cancels a nearly complete task and pending handoff before same-frame credit',()=>{
   // Exact terminal-race fixture: only elapsed/action remaining are set deliberately.
   const s=fresh();openTask(s,'bag');pick(s,goodSelf);s.elapsed=100-DT;s.action.time=s.action.duration-DT;
   frame(s);assert.equal(s.elapsed,100);assert.equal(s.status,'finished');assert.equal(s.action,null);
   assert.equal(task(s,'bag').done,false);assert.equal(s.grade,'incomplete');
-  const h=fresh(7);serve(h,'water','handoff');h.elapsed=100-DT;h.handoffJob.remaining=DT;
+  const h=fresh(7);openTask(h,'water');pick(h,c=>c.handoff);h.elapsed=100-DT;h.action.time=h.action.duration-DT;
   frame(h);assert.equal(task(h,'water').done,false);assert.equal(h.status,'finished');assert.equal(h.grade,'incomplete');
 });
 test('ignoring all requests times out incomplete with both hazards retained',()=>{
@@ -391,9 +381,8 @@ test('practice wrong choices reopen the same ordered dialog immediately with spe
     const s=fresh(seed,true);
     if(['water','blanket'].includes(id))serve(s,'bag');
     openTask(s,id);
-    if(['water','blanket'].includes(id)){pick(s,c=>c.ack);finishAction(s);assert.equal(interact(s),true);}
     const initial=clone(s),dialog=s.dialog,order=choices(s).map(c=>c.id),wrongChoices=choices(s).filter(c=>!c.good);
-    if(['bag','belt','tray'].includes(id))assert(wrongChoices.length>0,`${id} has a visible judgment error`);else assert(choices(s).every(c=>c.good),'unavailable service actions are never traps');
+    if(['bag','belt','tray'].includes(id))assert(wrongChoices.length>0,`${id} has a visible judgment error`);else assert(wrongChoices.some(c=>c.id==='serve'),'ordinary delivery during final checks is a contextual mistake');
     for(const wrong of [...wrongChoices,...wrongChoices]){
       pick(s,c=>c.id===wrong.id);
       assert.equal(s.action,null,'practice correction must not create a wait action');
@@ -406,7 +395,7 @@ test('practice wrong choices reopen the same ordered dialog immediately with spe
       for(const field of ['elapsed','completed','safety','comfort','safetyErrors','mistakes','servicePenalty','handoffTokens'])assert.equal(s[field],initial[field],field);
       const frozen=clone(s);advance(s,3,{autoLessons:false,input:{x:1,z:1}});assert.deepEqual(s,frozen,'reading retry feedback remains frozen');
     }
-    const correct=pick(s,goodSelf);assert.equal(s.dialog,null);assert.equal(s.action.kind,'task');
+    const correct=pick(s,goodSelf);assert.equal(s.dialog,null);assert.equal(s.action.kind,correct.ack?'wait':'task');
     assert.equal(s.action.duration,correct.duration,'correct choices retain physical action duration');finishAction(s);
     assert.equal(task(s,id).done,true);assert.equal(s.safetyErrors,0);assert.equal(s.mistakes,0);
     assert.equal(s.safety,100);assert.equal(s.servicePenalty,0);
@@ -462,9 +451,9 @@ test('all three action clocks finish exactly at 30, 60 and 120 Hz',()=>{
     assert.equal(s.action,null,`${mode} ends exactly at deadline at ${fps} Hz`);approx(s.elapsed,at+duration);
   }
 });
-test('personal on-time service earns seven comfort and no safety compensation',()=>{
+test('recording on-time service earns eight comfort and no safety compensation',()=>{
   const s=fresh(7);serve(s,'bag');const comfort=s.comfort,safety=s.safety;
-  serve(s,'water');assert.equal(task(s,'water').late,false);assert.equal(s.comfort,comfort+7);assert.equal(s.safety,safety);
+  serve(s,'water');assert.equal(task(s,'water').late,false);assert.equal(s.comfort,comfort+8);assert.equal(s.safety,safety);
   assert.equal(task(s,'water').handoff,false);assert.equal(s.handoffTokens,1);
 });
 test('late service penalties cap subsequent comfort credits',()=>{
@@ -516,7 +505,7 @@ test('counts and targets are read-only and exclude completed or assigned tasks',
   assert.deepEqual([c.safety,c.service,c.hazards,c.completed],[0,0,0,0]);
   assert.equal(ts.filter(t=>t.kind==='safety').length,3);assert.equal(ts.filter(t=>t.kind==='service').length,1);
   assert(ts.some(t=>t.id==='report'));serve(s,'water','handoff');assert(!targets(s).some(t=>t.id==='water'));
-  assert.equal(counts(s).service,0);advance(s,s.handoffJob.remaining);assert.equal(counts(s).service,1);
+  assert.equal(counts(s).service,1);assert.equal(s.handoffJob,null);assert(task(s,'water').deferred);
   assert.equal(counts(s).handoffs,1);assert.equal(counts(s).completed,s.completed);
 });
 
