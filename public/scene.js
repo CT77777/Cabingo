@@ -1,6 +1,6 @@
-import {boardingTaskActor} from './boarding.mjs?v=0.7.2';
+import {boardingTaskActor} from './boarding.mjs?v=training-modes-2';
 import * as THREE from './vendor/three.module.min.js';
-import {passengerPose,actionPose,serviceItemPose,serviceTrayPresentation,SERVICE_TRAY,GALLEY_SUPPLY,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=final-check-1';
+import {passengerPose,actionPose,serviceItemPose,serviceTrayPresentation,SERVICE_TRAY,GALLEY_SUPPLY,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=ch2-deadlines-2';
 
 
 // Gameplay and scene share x/z coordinates. Both cameras face +z along the
@@ -379,7 +379,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     for (const material of record.glows) material.emissiveIntensity = glowing ? .38 : 0;
     if (task.id === 'bag') {
       const b = record.destination;
-      floorBag.set(0,.46,record.z);
+      floorBag.set(state.assessment?record.side*.55:0,.46,record.z);
       liftedBag.set(record.side*.10,2.44,record.z);
       entryBag.set(b.side*1.36,2.44,record.z);
       stowedBag.set(b.x,2.43,record.z);
@@ -410,7 +410,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
       const hand={x:state.player.x+.27*Math.cos(angle)+.39*Math.sin(angle),y:1.18,z:state.player.z-.27*Math.sin(angle)+.39*Math.cos(angle)},dest={x:record.x,y:1.04,z:record.z-.35};
       const selfPose=serviceItemPose({source:serviceTrayPresentation({...state.player,angle}),hand,dest,progress:p});
       const activeJob=colleagueState.taskId===task.id&&!!state.handoffJob;
-      record.delivery.visible=state.phase!=='final-cabin-check'&&!task.deferred&&(task.done||self||activeJob);
+      record.delivery.visible=(state.phase!=='final-cabin-check'||state.assessment&&state.chapterId==='preflight')&&!task.deferred&&(task.done||self||activeJob);
       if(task.done)record.delivery.position.set(dest.x,dest.y,dest.z);
       else if(activeJob){const q=colleagueState.transfer, pickup=smooth(colleagueState.pickup||0),carry={x:colleagueState.carryX,y:1.11,z:colleagueState.carryZ};
         if(colleagueState.phase==='preparing')record.delivery.position.set(GALLEY_SUPPLY.x+(carry.x-GALLEY_SUPPLY.x)*pickup,GALLEY_SUPPLY.y+(carry.y-GALLEY_SUPPLY.y)*pickup,GALLEY_SUPPLY.z+(carry.z-GALLEY_SUPPLY.z)*pickup);
@@ -438,7 +438,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
   function render(state, dt = 0) {
     if (disposed) return {labels:[]}; resize();
     // Boarding keeps service props out of the aisle.
-    const showServiceProps=!state.boarding&&state.chapterId!=='boarding'&&state.phase!=='final-cabin-check';
+    const showServiceProps=!state.boarding&&state.chapterId!=='boarding'&&(state.phase!=='final-cabin-check'||state.assessment&&state.chapterId==='preflight');
     const selfServing=state.action?.kind==='task'&&state.action.choice?.id==='serve'&&['water','blanket'].includes(state.action.taskId);
     serviceTray.visible=showServiceProps&&selfServing;galleyDrawer.visible=showServiceProps;
     const player = state.player || {x:0,z:1.5,angle:0,walking:false,step:0};

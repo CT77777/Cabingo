@@ -140,5 +140,5 @@ export function tickBoarding(s,dt){
  const busy=b.blockedStanding>3;
  if(busy){b.congestionTime+=dt;if(b.congestionTime>=8&&!b.congestionLatched){b.congestionLatched=true;b.congestionEvents++;if(!s.practice){s.safetyErrors++;s.mistakes++;s.safety=Math.max(0,s.safety-20);}s.feedback='走道持續擁擠。先解開紅色座位問題，讓人流繼續前進。';s.feedbackKind='warning';}}
  else {b.congestionTime=0;b.congestionLatched=false;}
- for(const t of s.tasks)if(t.active&&!t.done&&t.kind==='service'&&!t.late&&s.elapsed-t.spawn>=40){t.late=true;if(!s.practice){s.comfort=Math.max(0,s.comfort-8);s.servicePenalty+=8;}s.feedback='家長已等候一段時間，請在安全問題處理後協助入座。';}
+ for(const t of s.tasks)if(!s.practice&&t.active&&!t.done&&t.kind==='service'&&!t.late&&s.elapsed-t.spawn>=40){t.late=true;if(!s.practice){s.comfort=Math.max(0,s.comfort-8);s.servicePenalty+=8;}s.feedback='家長已等候一段時間，請在安全問題處理後協助入座。';}
 }

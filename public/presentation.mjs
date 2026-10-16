@@ -51,7 +51,7 @@ export function coworkerPresentation(state={}) {
   const task=job?tasks.find(t=>t.id===job.taskId):tasks.find(t=>t.handoff&&t.done);
   const home={x:.53,z:.7};
   if(!task)return {...home,phase:'idle',progress:0,taskId:null,carrying:false,transfer:0,walking:false};
-  if(state.phase==='final-cabin-check')return {...home,phase:task.deferred?'recorded':'recording',progress:task.deferred?1:0,taskId:task.id,carrying:false,transfer:0,walking:false,settled:true};
+  if(state.phase==='final-cabin-check'&&!(state.assessment&&state.chapterId==='preflight'))return {...home,phase:task.deferred?'recorded':'recording',progress:task.deferred?1:0,taskId:task.id,carrying:false,transfer:0,walking:false,settled:true};
   const active=!!job,p=active?clamp((12-job.remaining)/12):1,age=active?0:Math.max(0,(state.elapsed||0)-(task.completedAt||0));
   const side=task.side==='right'?1:-1,dest={x:side*.53,z:task.z-.6};
   let phase,x=home.x,z=home.z,walking=false,carrying=false,transfer=0;

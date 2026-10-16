@@ -1,4 +1,6 @@
+import {assessmentSummary} from './assessment.mjs?v=ch2-deadlines-2';
 export function summarizeResult(s) {
+  if(s.assessment){const result=assessmentSummary(s);return {stars:result.stars,title:result.title,advice:'查看各題首次判斷，再針對錯題練習。',record:null};} // Legacy records never mix with assessment records.
   const complete=s.endReason==='complete'&&s.grade!=='incomplete';
   const stars=s.practice?null:!complete||s.safetyErrors>=2?0:s.safetyErrors===1?1:s.mistakes===0&&s.comfort>=95?3:2;
   const title=s.practice?'練習完成。':stars===3?'從容出發，零失誤。':s.safetyErrors===1&&complete?'補救完成，紀錄保留。':stars===2?'巡艙完成，繼續精進。':complete?'工作完成，判斷需重試。':'還有工作，下輪再試。';

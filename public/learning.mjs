@@ -1,4 +1,4 @@
-import {summarizeResult} from './results.mjs?v=final-check-1';
+import {summarizeResult} from './results.mjs?v=training-modes-2';
 import {KNOWLEDGE,cardsForTask} from './knowledge/index.mjs?v=final-check-1';
 export const CODEX_STORAGE_KEY='cabin3d-codex-v1';
 const object=x=>x&&typeof x==='object'&&!Array.isArray(x);
@@ -6,7 +6,7 @@ const object=x=>x&&typeof x==='object'&&!Array.isArray(x);
 // Only the current registry is displayed, so unknown content cannot inject UI.
 const normalize=value=>{const ids=new Set((Array.isArray(value?.unlockedIds)?value.unlockedIds:[]).filter(id=>typeof id==='string'&&/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)).slice(0,512));const known=KNOWLEDGE.filter(c=>ids.has(c.id)).map(c=>c.id);return {version:1,unlockedIds:[...known,...[...ids].filter(id=>!known.includes(id)).sort()].slice(0,256)};};
 export function parseCodex(raw){try{const v=JSON.parse(raw);return object(v)&&v.version===1?normalize(v):normalize(null);}catch{return normalize(null);}}
-export function canAwardChapterCards(state){return state.status==='finished'&&!state.practice&&state.endReason==='complete'&&!!summarizeResult(state).record;}
+export function canAwardChapterCards(state){return state.status==='finished'&&!state.practice&&!state.assessment&&state.endReason==='complete'&&!!summarizeResult(state).record;}
 export function awardChapterCards(codex,state){
  const next=normalize(codex);
  if(!canAwardChapterCards(state))return next;
