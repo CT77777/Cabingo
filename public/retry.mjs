@@ -15,6 +15,7 @@ export function createRetry(candidate) {
 export function retryPrompt(session) {
   const {id,variant}=session.decision.task;
   const prompts={
+    priority:'根據眼前兩件事的風險，你應優先處理什麼？',
     guide:'旅客不知道登機證上的座位在哪裡，你會如何協助？',
     seat:'兩位旅客都以為自己坐 4C，你會如何核對？',
     family:'家長抱著孩子，手提袋擋住走道，你會如何協助？',

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import {createCampaign,parseCampaign,recordChapterResult,selectCampaignChapter,updateCharacterMemory,CAMPAIGN_STORAGE_KEY,prepareCampaignSave} from '../public/campaign.mjs';
-const base=createCampaign();assert.equal(CAMPAIGN_STORAGE_KEY,'cabin3d-campaign-v2');assert.equal(base.version,2);assert.equal(base.currentChapterId,'boarding');assert.deepEqual(base.unlockedChapterIds,['boarding']);
+const base=createCampaign();assert.equal(CAMPAIGN_STORAGE_KEY,'cabin3d-campaign-v2');assert.equal(base.version,2);assert.equal(base.currentChapterId,'boarding');assert.deepEqual(base.unlockedChapterIds,['boarding','preflight']);
 for(const raw of [null,'bad','[]','null','{}','{"version":99}'])assert.deepEqual(parseCampaign(raw),base);
-assert.deepEqual(selectCampaignChapter(base,'preflight'),base);
+assert.equal(selectCampaignChapter(base,'preflight').currentChapterId,'preflight');
 const migrated=parseCampaign(null,{legacyCampaign:JSON.stringify({version:1,currentChapterId:'preflight',unlockedChapterIds:['boarding','preflight'],bestStars:{preflight:2}})});assert.equal(migrated.currentChapterId,'preflight');assert.equal(migrated.bestStars.preflight,2);assert(!migrated.bestStars.boarding);
 const legacy=parseCampaign(null,{legacyBest:{version:1,stars:3}});assert.equal(legacy.bestStars.preflight,3);assert(legacy.unlockedChapterIds.includes('preflight'));
 const won=recordChapterResult(base,{chapterId:'boarding',complete:true,stars:3});assert(won.unlockedChapterIds.includes('preflight'));assert.equal(selectCampaignChapter(won,'preflight').currentChapterId,'preflight');

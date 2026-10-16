@@ -49,7 +49,7 @@ assert.equal(getFeedback(handed,'service').status,'improve');assert.match(getFee
 advance(handed,13);assert.equal(getFeedback(handed,'service').status,'good');assert.match(getFeedback(handed,'service').evidence,/同事已送達/);
 assert(!getFeedback(handed,'service').evidence.includes('回報'),'delivery alone does not prove a report');
 
-const late=trainingRun();advance(late,34);
+const late=trainingRun({practice:false});advance(late,34);
 assert.equal(getFeedback(late,'service').status,'improve');assert.match(getFeedback(late,'service').evidence,/等候超時/);
 const blockedService=trainingRun();blockedService.tasks.find(t=>t.id==='bag').variant=0;
 openTask(blockedService,'water');choose(blockedService,blockedService.dialog.choices.findIndex(c=>c.ack));advance(blockedService);

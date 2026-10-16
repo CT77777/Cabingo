@@ -343,7 +343,7 @@ body[data-panel=decision][data-decision-kind=safety] .scene-badge { display:none
 .speaker-button svg { fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
 .speaker-button:hover { background:#a8dfcb18; }
 .volume-control[data-muted=true] .speaker-button { color:#c9d4d4; }
-#volumeSlider { appearance:none; -webkit-appearance:none; width:70px; min-height:42px; height:42px; border-radius:4px; margin:0; cursor:pointer; background-size:100% 4px; background-position:center; background-repeat:no-repeat; }
+#volumeSlider { appearance:none; -webkit-appearance:none; width:70px; min-height:42px; height:42px; border-radius:4px; margin:0; cursor:pointer; background-color:transparent; background-size:100% 4px; background-position:center; background-repeat:no-repeat; }
 #volumeSlider::-webkit-slider-runnable-track { height:4px; background:transparent; }
 #volumeSlider::-moz-range-track { height:4px; background:transparent; }
 #volumeSlider::-webkit-slider-thumb { margin-top:-4px; appearance:none; -webkit-appearance:none; width:12px; height:12px; background:#d8f2df; border:0; border-radius:50%; box-shadow:0 0 0 4px #a8dfcb10; }
@@ -809,3 +809,11 @@ body[data-panel=result] aside, body[data-panel=result] .control-dock, body[data-
 body[data-panel=brief] .mission-hud, body[data-panel=error] .mission-hud, body[data-panel=lesson] .mission-hud, body[data-panel=pause] .mission-hud, body[data-panel=recovery] .mission-hud, body[data-panel=result] .mission-hud { display:none; }
 
 @media(max-width:700px) and (min-height:521px) { .mission-hud { max-height:calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--dock-height) - 134px); } }
+
+.start-card .assessment-intro { font-size:11px; line-height:1.5; margin:0 0 12px; color:#bcd3cb; }
+
+@media (hover: hover) and (pointer: fine) {
+  .start-card>.mode-start:not(:disabled):hover,
+  .start-card>.codex-launch:not(:disabled):hover { background:var(--mint); border-color:var(--mint); color:#173d3e; }
+  .start-card>.codex-launch:not(:disabled):hover span { color:inherit; }
+}

@@ -1,6 +1,6 @@
-import {PREFLIGHT_CHAPTER} from './preflight.mjs?v=recording-time-1';
+import {PREFLIGHT_CHAPTER} from './preflight.mjs?v=training-modes-2';
 
-import {BOARDING_CHAPTER} from './boarding.mjs?v=0.7.2';
+import {BOARDING_CHAPTER} from './boarding.mjs?v=training-modes-2';
 
 export const DEFAULT_CHAPTER_ID='preflight';
 const planned=(id,order,title,phase,duration)=>Object.freeze({

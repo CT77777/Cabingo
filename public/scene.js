@@ -1,4 +1,4 @@
-import {boardingTaskActor} from './boarding.mjs?v=0.7.2';
+import {boardingTaskActor} from './boarding.mjs?v=training-modes-2';
 import * as THREE from './vendor/three.module.min.js';
 import {passengerPose,actionPose,serviceItemPose,serviceTrayPresentation,SERVICE_TRAY,GALLEY_SUPPLY,decisionPose,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=final-check-1';
 
@@ -379,7 +379,7 @@ export function createCabinView(canvas, { onContextLost } = {}) {
     for (const material of record.glows) material.emissiveIntensity = glowing ? .38 : 0;
     if (task.id === 'bag') {
       const b = record.destination;
-      floorBag.set(0,.46,record.z);
+      floorBag.set(state.assessment?record.side*.55:0,.46,record.z);
       liftedBag.set(record.side*.10,2.44,record.z);
       entryBag.set(b.side*1.36,2.44,record.z);
       stowedBag.set(b.x,2.43,record.z);

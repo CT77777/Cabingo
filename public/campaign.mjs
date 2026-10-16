@@ -5,9 +5,9 @@ export const CHARACTER_IDS=Object.freeze(['elder','business','parent','student',
 const object=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
 const validStars=value=>Number.isInteger(value)&&value>=1&&value<=3;
 
-// Fresh players begin at boarding; M0/v1 players keep their previous access.
+// All released chapters are directly selectable; saved legacy records remain intact.
 export function createCampaign(){
- return {version:2,currentChapterId:'boarding',unlockedChapterIds:['boarding'],bestStars:{},characterMemory:{}};
+ return {version:2,currentChapterId:'boarding',unlockedChapterIds:CHAPTERS.filter(c=>c.available).map(c=>c.id),bestStars:{},characterMemory:{}};
 }
 function normalize(value){
  const next=createCampaign();
