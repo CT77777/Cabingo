@@ -419,7 +419,10 @@ body[data-panel=decision][data-decision-kind=safety] .scene-badge { display:none
 .coworker-handoff small { font-size:11px; margin-top:3px; }
 .coworker-handoff progress { display:block; width:100%; height:5px; margin-top:8px; accent-color:var(--mint); }
 
-.chapter-picker { margin:14px 0 6px; border:1px solid #b4d8cb44; border-radius:8px; text-align:left; }
+.brief-chapter-heading { margin-top:16px; padding-top:14px; border-top:1px solid #b8d7bf33; }
+.brief-chapter-heading h2 { margin:5px 0 0; font-size:16px; color:var(--mint); }
+.chapter-picker[open] .chapter-picker-selection { display:none; }
+.chapter-picker { margin:0 0 6px; border:1px solid #b4d8cb44; border-radius:8px; text-align:left; }
 .chapter-picker summary { padding:10px 12px; cursor:pointer; color:#eaf1e9; font-size:13px; }
 .chapter-list { display:grid; gap:6px; padding:0 8px 8px; max-height:min(38dvh,320px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
 .chapter-option { display:grid; grid-template-columns:16px minmax(0,1fr); column-gap:7px; align-items:center; text-align:left; min-height:48px; width:100%; padding:8px; background:#163240; border:1px solid #a8dfcb22; border-radius:6px; color:#eaf1e9; }
