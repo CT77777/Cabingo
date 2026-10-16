@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import {createState,start,dismissLesson,interact,choose} from '../public/preflight.mjs';
-import {retryCandidates,createRetry,answerRetry,retryComparison} from '../public/retry.mjs';
+import {retryCandidates,createRetry,retryPrompt,answerRetry,retryComparison} from '../public/retry.mjs';
 import {awardChapterCards,parseCodex} from '../public/learning.mjs';
 
 function missedTask(chapterId,taskId,variant=0){
-  const state=createState({chapterId,seed:1701,contextual:true,practice:true});
+  const state=createState({chapterId,seed:1701,contextual:true,practice:true,characterMemory:{elder:{helped:true}}});
   start(state);if(state.lesson)dismissLesson(state);
   const task=state.tasks.find(t=>t.id===taskId);task.variant=variant;
   for(const t of state.tasks)t.active=t===task;
@@ -29,6 +29,15 @@ for(const [chapterId,ids] of [['boarding',['guide','bag','seat','family']],['pre
     assert.equal(candidate.decision.description,original.description);
     assert.deepEqual(candidate.decision.choices.map(c=>c.label),original.choices.map(c=>c.label));
     const session=createRetry(candidate),wrong=session.decision.choices.findIndex(c=>!c.good),good=session.decision.choices.findIndex(c=>c.good);
+    assert(retryPrompt(session).endsWith('？'),'every retry has an explicit question');
+    assert(retryPrompt(session).includes('你會如何'));
+    if(taskId==='belt'){
+      assert(original.quote.startsWith('又見面了，謝謝你登機時幫我。'),'the full chapter keeps its character greeting');
+      assert(!session.decision.quote.includes('又見面了'),'standalone practice omits the chapter greeting');
+      assert.equal(session.decision.quote,original.practiceQuote);
+      if(variant===0)assert.equal(retryPrompt(session),'旅客正在看手機，安全帶尚未扣好，你會如何提醒？');
+      if(variant===2)assert(retryPrompt(session).includes('已扣好'),'a fastened belt must not be described as unfastened');
+    }
     assert.equal(retryComparison(session),null);
     for(const invalid of [-1,99,NaN,'1',null])assert(!answerRetry(session,invalid));
     assert.equal(session.attempts,0);

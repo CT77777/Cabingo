@@ -775,7 +775,7 @@ body[data-panel=result] aside, body[data-panel=result] .control-dock, body[data-
 .retry-card { width:min(100%,600px); max-height:100%; overflow:auto; overscroll-behavior:contain; border:1px solid #a8dfcb77; border-radius:18px; padding:24px; background:#173541; overflow-wrap:anywhere; }
 .retry-heading { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:8px; }
 .retry-heading button { min-height:44px; }
-.retry-card h2 { font-size:24px; line-height:1.4; margin:14px 0 10px; }
+.retry-card h2 { font-size:24px; line-height:1.4; margin:14px 0 10px; text-wrap:balance; }
 .retry-card p { font-size:14px; line-height:1.7; }
 .retry-card .training-scope { font-size:12px; color:#bbd4cb; }
 .retry-card .choices { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; margin:16px 0; }

@@ -62,6 +62,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
     const h=harness(logic,{contextual:true,chapterId});h.begin(practice);const s=h.state();
     if(s.lesson)h.dismiss();
     const task=s.tasks.find(t=>t.id===(chapterId==='boarding'?'guide':'belt'));
+    if(chapterId==='preflight'){s.characterMemory={elder:{helped:true}};task.variant=0;}
     s.player.z=task.z-.8;logic.interact(s);h.api.refresh(true);h.choice(c=>!c.good);
     if(!s.recovery.ready)h.step(130);h.ids.recoveryContinue.click({detail:1});h.choice(c=>c.good);h.step(180);
     s.status='finished';s.endReason='timeout';s.grade='incomplete';h.api.refresh(true);return h;
@@ -69,6 +70,7 @@ function harness(logic,{seed=1701,handsOn=true,contextual=false,guidedBoarding=f
   test('Targeted retry preserves the finished chapter, scores and all storage while comparing two attempts',()=>{
     const h=retryResult(),before=copy(h.state()),storage=copy(h.storage);assert.equal(h.ids.retryTaskList.children.length,1);
     const trigger=h.ids.retryTaskList.children[0];trigger.click({detail:1});assert(!h.ids.retryOverlay.hidden);assert(h.ids.resultOverlay.inert);assert.equal(h.document.activeElement,h.ids.retryTitle);
+    assert.equal(h.ids.retryTitle.textContent,'旅客正在看手機，安全帶尚未扣好，你會如何提醒？');assert.equal(h.ids.retryQuote.textContent,'旅客：「嗯？你剛剛說什麼？」');assert(h.state().tasks.find(t=>t.id==='belt').quote.includes('又見面了'));
     assert.equal(h.ids.retryContext.textContent,h.state().judgments[0].retryDecision.description);
     const good=h.state().judgments[0].retryDecision.choices.findIndex(c=>c.good),wrong=h.state().judgments[0].retryDecision.choices.findIndex(c=>!c.good);
     h.tap(`Digit${wrong+1}`);assert(!h.ids.retryFeedback.hidden);assert(h.ids.retryComparison.hidden);assert.equal(h.document.activeElement,h.ids.retryFeedback);

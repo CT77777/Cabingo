@@ -1,6 +1,6 @@
 import {createBoardingEvidence} from './boarding-ui.mjs?v=0.7.2';
-import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents,actionInput,ackRecovery,cancelEscort} from './preflight.mjs?v=0.7.3-retry';
-import {retryCandidates,createRetry,answerRetry,retryComparison} from './retry.mjs?v=0.7.3-retry';
+import {createState,start,tick,interact,choose,closeDialog,pause,resume,dismissLesson,targets,counts,chapterReady,readEvents,actionInput,ackRecovery,cancelEscort} from './preflight.mjs?v=0.7.3-retry-copy';
+import {retryCandidates,createRetry,retryPrompt,answerRetry,retryComparison} from './retry.mjs?v=0.7.3-retry-copy';
 import {BOARDING_TUTORIAL,boardingEvidence,boardingCoach,inspectBoardingClue} from './boarding.mjs?v=0.7.2';
 import {layoutLabels,crossedMilestones,coworkerPresentation,COWORKER_PHASE_LABELS} from './presentation.mjs?v=0.7.2';
 import {createCabinAudio} from './audio.mjs?v=0.7.2';
@@ -149,7 +149,7 @@ function openRetry(taskId,trigger,event={}){
 function renderRetry(){
  if(!retrySession)return;
  const session=retrySession,d=session.decision,comparison=retryComparison(session);
- text('retryTitle',session.title);text('retryQuote',`「${d.quote}」`);text('retryContext',d.description);
+ text('retryTitle',retryPrompt(session));text('retryQuote',`旅客：「${d.quote}」`);text('retryContext',d.description);
  const evidence=session.boarding?boardingEvidence(d.task):[];
  hide('retryEvidence',!evidence.length);$('retryEvidence').replaceChildren(...createBoardingEvidence(document,evidence));
  hide('retryReference',!evidence.some(item=>item.kind==='pass'));
